@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "slug": "your-mod-slug",
+      "modIds": ["your_mod_id"],
+      "originalName": "Your Mod",
+      "nameZh": "你的模组中文名",
+      "descriptionZh": "在这里填写你自己编写或已获授权使用的中文简介。",
+      "aliases": ["中文搜索别名"],
+      "source": "你的名称或翻译项目",
+      "sourceUrl": "https://example.com/translation-source",
+      "license": "填写此条中文简介的许可"
+    }
+  ]
+}

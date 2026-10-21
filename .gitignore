@@ -1,0 +1,14 @@
+node_modules/
+dist/
+dist-electron/
+release/
+.cache/
+test-results/
+*.log
+.env*
+.minecraft/
+LDFCL-data/
+.ldfcl-migration-*/
+accounts.json
+launcher.json
+credential.xml

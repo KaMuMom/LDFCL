@@ -1,0 +1,121 @@
+.mod-install-dialog {
+  width: min(640px, calc(100vw - 48px));
+  max-height: calc(100vh - 56px);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #ffffffc9;
+  border-radius: 28px;
+  color: #172c47;
+  background: #f2f7ffb8;
+  box-shadow:
+    0 28px 90px #30497530,
+    inset 0 1px 0 #ffffff;
+}
+.mod-install-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.mod-install-dialog::backdrop {
+  background: #344b7538;
+  backdrop-filter: blur(10px) saturate(1.1);
+}
+.mod-install-heading,
+.mod-install-footer {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 15px;
+  padding: 23px 26px;
+}
+.mod-install-heading {
+  border-bottom: 1px solid #b8cbe433;
+}
+.mod-install-heading > div {
+  flex: 1;
+  min-width: 0;
+}
+.mod-install-heading h2 {
+  margin: 0 0 6px;
+  color: #172c47;
+  font-size: 21px;
+  font-weight: 650;
+}
+.mod-install-heading p {
+  margin: 0;
+  color: #7a8ea9;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.mod-install-body {
+  display: grid;
+  gap: 18px;
+  min-height: 0;
+  padding: 24px 26px;
+  overflow-y: auto;
+}
+.mod-install-body label {
+  display: grid;
+  gap: 9px;
+  color: #5d7391;
+  font-size: 12px;
+  font-weight: 600;
+}
+.mod-install-body select {
+  width: 100%;
+  min-width: 0;
+}
+.mod-install-body p {
+  margin: 0;
+  color: #8394ae;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.mod-install-body .notice {
+  align-items: flex-start;
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.mod-install-body .notice svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.mod-install-body .danger {
+  flex-wrap: wrap;
+}
+.mod-install-body .danger .btn {
+  margin-left: auto;
+}
+.mod-install-footer {
+  justify-content: space-between;
+  border-top: 1px solid #b8cbe438;
+  background: #ffffff35;
+  font-size: 11px;
+}
+.mod-install-footer > span {
+  color: #8b9bb1;
+}
+.mod-install-footer .btn {
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .mod-install-dialog {
+    width: calc(100vw - 28px);
+    max-height: calc(100vh - 32px);
+  }
+  .mod-install-heading,
+  .mod-install-body,
+  .mod-install-footer {
+    padding: 18px;
+  }
+  .mod-install-heading .resource-dialog-icon {
+    display: none;
+  }
+  .mod-install-footer {
+    flex-wrap: wrap;
+  }
+  .mod-install-footer .btn {
+    width: 100%;
+  }
+}

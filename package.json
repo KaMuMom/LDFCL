@@ -1,0 +1,68 @@
+{
+  "name": "ldfcl",
+  "version": "0.5.0",
+  "private": true,
+  "description": "LDFCL — Liquid Dream Fabric Craft Launcher",
+  "author": "LDFCL Contributors",
+  "license": "MIT",
+  "main": "dist-electron/electron/main.js",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -p tsconfig.electron.json && tsc -p tsconfig.json && vite build",
+    "start": "electron .",
+    "dist": "npm run build && electron-builder --win portable --x64",
+    "test": "node --test tests/*.test.cjs"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "liquid-glass-react": "1.1.1",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "skinview-utils": "^0.7.1",
+    "skinview3d": "^3.4.2"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^39.0.0",
+    "electron-builder": "^26.0.12",
+    "playwright-core": "^1.64.1",
+    "prettier": "^3.9.10",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  },
+  "build": {
+    "appId": "io.ldfcl.launcher",
+    "productName": "LDFCL",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json",
+      "LICENSE",
+      "README.md",
+      "THIRD_PARTY_NOTICES.md",
+      "VALIDATION.md",
+      "CREDITS.md",
+      "docs/**/*"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "artifactName": "LDFCL-${version}-Windows-x64.exe",
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": true
+    },
+    "portable": {
+      "requestExecutionLevel": "user"
+    }
+  }
+}

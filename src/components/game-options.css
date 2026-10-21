@@ -1,0 +1,166 @@
+.game-options-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.game-options-fields .game-option-card {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+  margin: 0;
+  padding: 19px;
+  border: 1px solid rgba(176, 199, 232, 0.25);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.game-option-label {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.game-options-fields .game-option-card label {
+  margin: 0;
+  color: #506785;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.game-option-label output {
+  color: #5e82c5;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-options-fields .game-option-card input[type="range"] {
+  width: 100%;
+  min-width: 0;
+  margin: 3px 0;
+  accent-color: #5e87e5;
+}
+
+.game-options-fields .game-option-card select {
+  width: 100%;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.game-options-fields .game-option-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  min-height: 65px;
+  margin: 0;
+  padding: 17px 19px;
+  border: 1px solid rgba(176, 199, 232, 0.25);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.38);
+  color: #506785;
+  font-size: 12px;
+}
+
+.game-option-toggle > .toggle {
+  flex-shrink: 0;
+}
+
+.general-game-settings {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  padding: 26px;
+}
+
+.general-game-heading {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.general-game-emblem {
+  display: grid;
+  flex: 0 0 46px;
+  width: 46px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 16px;
+  background: linear-gradient(
+    145deg,
+    rgba(216, 232, 255, 0.75),
+    rgba(229, 222, 252, 0.6)
+  );
+  color: #6b8ac6;
+}
+
+.general-game-heading .eyebrow {
+  font-size: 9px;
+  letter-spacing: 0.15em;
+}
+
+.general-game-heading h3 {
+  margin: 6px 0 0;
+  color: #243d5d;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.general-game-switch {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 0 20px;
+  border-bottom: 1px solid rgba(155, 180, 215, 0.18);
+}
+
+.general-game-switch > div {
+  min-width: 0;
+}
+
+.general-game-switch strong {
+  color: #4d6585;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.general-game-switch p {
+  margin: 7px 0 0;
+  color: #8493aa;
+  font-size: 11px;
+  line-height: 1.8;
+}
+
+.general-game-switch > .toggle {
+  flex-shrink: 0;
+}
+
+.general-game-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.9;
+}
+
+@media (max-width: 1080px) {
+  .instance-game-options .game-options-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .general-game-settings {
+    padding: 22px;
+  }
+}
+
+@media (max-width: 620px) {
+  .game-options-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
