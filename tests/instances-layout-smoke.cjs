@@ -403,6 +403,13 @@ const AdmZip = require("adm-zip");
     assert.equal(initialState.system.gameRoot, gameRoot);
     assert.equal(initialState.system.gameDirectoryError, undefined);
     assert.equal(initialState.instances.length, instances.length);
+    // Opening the launcher must not start CAS migration or create metadata for
+    // either instance. First-use storage work belongs to an explicit mutation.
+    assert.deepEqual(await tree(instanceDir(instances[0])), beforeA);
+    assert.deepEqual(await tree(instanceDir(instances[1])), beforeB);
+    checks.push(
+      "startup preserves both instance trees exactly without eager CAS manifests or backups",
+    );
     await openInstances(page);
     await assertMod(page, "Only A Mod", "Only B Mod");
     assert.equal(
@@ -637,7 +644,11 @@ const AdmZip = require("adm-zip");
         .getAttribute("class"),
       /selected/,
     );
-    assert.deepEqual(await tree(instanceDir(instances[1])), beforeB);
+    assert.deepEqual(
+      await tree(instanceDir(instances[1])),
+      beforeB,
+      "restart must not migrate or add metadata to the unmodified B instance",
+    );
     checks.push(
       "selected version persists after restart and reopens its own default Mod management pane",
     );

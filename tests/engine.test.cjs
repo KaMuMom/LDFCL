@@ -8,15 +8,15 @@ const { createHash } = require("node:crypto");
 const AdmZip = require("adm-zip");
 const compiledRoot =
   process.env.LDFCL_TEST_COMPILED_ROOT ||
-  path.join(__dirname, "..", "dist-electron");
+  path.join(__dirname, "..", "core", "dist");
 const { rulesAllow, tokenizeArguments, expandArguments, mavenPath } = require(
-  path.join(compiledRoot, "electron/services/game.js"),
+  path.join(compiledRoot, "core/services/game.js"),
 );
 const { JavaManager, javaMajor, automaticMemoryMb, safeExtractZip } = require(
-  path.join(compiledRoot, "electron/services/java.js"),
+  path.join(compiledRoot, "core/services/java.js"),
 );
 const { DownloadManager, fileHash } = require(
-  path.join(compiledRoot, "electron/services/downloads.js"),
+  path.join(compiledRoot, "core/services/downloads.js"),
 );
 
 test("Mojang OS rules preserve ordering and distinguish x86 from x64", () => {

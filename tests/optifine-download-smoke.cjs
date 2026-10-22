@@ -47,6 +47,7 @@ const assert = require("node:assert/strict");
         held: q.held.length,
         installs: q.installs,
         unexpected: q.unexpected,
+        minecraftRequests: q.minecraftRequests,
       };
     });
   const setMode = (version, mode) =>
@@ -131,11 +132,9 @@ const assert = require("node:assert/strict");
       const requireApp = process
         .getBuiltinModule("module")
         .createRequire(paths.join(app.getAppPath(), "package.json"));
-      const { GameService } = requireApp(
-        "./dist-electron/electron/services/game.js",
-      );
+      const { GameService } = requireApp("@ldfcl/core/services/game");
       const { allocateVersionDirectory } = requireApp(
-        "./dist-electron/electron/instance-paths.js",
+        "@ldfcl/core/instance-paths",
       );
       const q = (globalThis.__ldfclOptifineQA = {
         originalFetch: globalThis.fetch,
@@ -146,6 +145,7 @@ const assert = require("node:assert/strict");
         held: [],
         installs: [],
         unexpected: [],
+        minecraftRequests: 0,
       });
       const raw = (version, patch) => ({
         mcversion: version,
@@ -164,7 +164,8 @@ const assert = require("node:assert/strict");
         if (
           url ===
           "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
-        )
+        ) {
+          q.minecraftRequests++;
           return json({
             latest: { release: "1.21.1", snapshot: "1.21.1" },
             versions: ["1.21.1", "1.12.2", "26.1"].map((id) => ({
@@ -173,6 +174,7 @@ const assert = require("node:assert/strict");
               url: `https://qa.invalid/${id}.json`,
             })),
           });
+        }
         const match = url.match(
           /^https:\/\/bmclapi2\.bangbang93\.com\/optifine\/([^/?]+)$/,
         );
@@ -240,11 +242,16 @@ const assert = require("node:assert/strict");
       .getByRole("button", { name: "资源下载", exact: true })
       .click();
     await page.getByRole("tab", { name: "Minecraft", exact: true }).click();
+    // The mounted download view can finish its first real request before this
+    // main-process fixture is installed. Wait for it to settle via the native
+    // refresh button, then explicitly load fixture metadata through real IPC.
+    await panel().getByRole("button", { name: "刷新版本列表", exact: true }).click();
     await until(
       () => panel().locator(".version-list button").count(),
       (count) => count === 3,
       "Minecraft fixture versions",
     );
+    assert((await qa()).minecraftRequests > 0, "the refreshed list must originate from the installed network fixture");
     assert.deepEqual(
       (await qa()).requests,
       [],
@@ -453,9 +460,8 @@ const assert = require("node:assert/strict");
         const requireApp = process
           .getBuiltinModule("module")
           .createRequire(paths.join(app.getAppPath(), "package.json"));
-        requireApp(
-          "./dist-electron/electron/services/game.js",
-        ).GameService.prototype.install = q.originalInstall;
+        requireApp("@ldfcl/core/services/game").GameService.prototype.install =
+          q.originalInstall;
         globalThis.fetch = q.originalFetch;
         q.held.splice(0).forEach((resolve) => resolve());
       })

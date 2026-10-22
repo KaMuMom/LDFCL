@@ -204,12 +204,24 @@ const AdmZip = require("adm-zip");
       "Migration portable EXE did not expose CDP",
     );
     run.browser = await chromium.connectOverCDP(endpoint.webSocketDebuggerUrl);
-    run.page = run.browser.contexts()[0].pages()[0];
-    assert(run.page, "Migration application window is missing");
+    const context = run.browser.contexts()[0];
+    assert(context, "Migration application browser context is missing");
+    // Chromium exposes its CDP endpoint before main.ts finishes the migration
+    // and creates BrowserWindow. Attach first, then wait for that real window.
+    run.page =
+      context.pages()[0] ||
+      (await context.waitForEvent("page", {
+        timeout: 60000,
+      }));
     run.page.on("pageerror", (error) => pageErrors.push(error.message));
+    await run.page.waitForFunction(
+      () => typeof window.launcher?.call === "function",
+      undefined,
+      { timeout: 60000 },
+    );
     await run.page
       .getByRole("heading", { name: "开始游戏", exact: true })
-      .waitFor();
+      .waitFor({ timeout: 60000 });
     return run;
   }
   async function stop(run) {

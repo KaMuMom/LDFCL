@@ -7,8 +7,8 @@ import {
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { createServer, type Server, type ServerResponse } from "node:http";
-import { safeStorage } from "electron";
 import type { Account } from "../../shared/types";
+import type { SecretStorage } from "../ports";
 import { AccountLifecycle, type AccountLease } from "./accountLifecycle";
 
 type Emit = (event: any) => void;
@@ -384,6 +384,26 @@ export function validateSkinPng(buffer: Buffer): void {
     throw new Error("正版皮肤需要 64×64 或 64×32 像素 PNG。");
 }
 
+export interface AccountServiceOptions {
+  secretStorage?: SecretStorage;
+  microsoftPort?: number;
+  microsoftTimeoutMs?: number;
+  deviceClock?: {
+    now(): number;
+    sleep(ms: number, signal: AbortSignal): Promise<void>;
+  };
+}
+
+const unavailableSecretStorage: SecretStorage = {
+  isEncryptionAvailable: () => false,
+  encryptString: () => {
+    throw new Error("凭据加密服务不可用");
+  },
+  decryptString: () => {
+    throw new Error("凭据解密服务不可用");
+  },
+};
+
 export class AccountService {
   private readonly file: string;
   private readonly ready: Promise<void>;
@@ -394,26 +414,21 @@ export class AccountService {
   private microsoftDeviceSession?: DeviceSession;
   private readonly lifecycle = new AccountLifecycle();
   private readonly launchAuth = new Map<string, Promise<AuthorizedAccount>>();
+  private readonly secretStorage: SecretStorage;
 
   constructor(
     private readonly dataDir: string,
     private readonly emit: Emit,
-    private readonly options: {
-      microsoftPort?: number;
-      microsoftTimeoutMs?: number;
-      deviceClock?: {
-        now(): number;
-        sleep(ms: number, signal: AbortSignal): Promise<void>;
-      };
-    } = {},
+    private readonly options: AccountServiceOptions = {},
   ) {
     this.file = path.join(dataDir, "accounts.json");
+    this.secretStorage = options.secretStorage ?? unavailableSecretStorage;
     this.ready = this.load();
   }
 
   private secureStorageAvailable(): boolean {
     try {
-      return safeStorage.isEncryptionAvailable();
+      return this.secretStorage.isEncryptionAvailable();
     } catch {
       return false;
     }
@@ -451,7 +466,9 @@ export class AccountService {
       if (encryptedSecrets && this.secureStorageAvailable()) {
         try {
           secret = JSON.parse(
-            safeStorage.decryptString(Buffer.from(encryptedSecrets, "base64")),
+            this.secretStorage.decryptString(
+              Buffer.from(encryptedSecrets, "base64"),
+            ),
           );
         } catch {
           /* Another Windows user or corrupt encrypted data: sign in again. */
@@ -475,7 +492,7 @@ export class AccountService {
           refreshToken: account.refreshToken,
           clientToken: account.clientToken,
         };
-        metadata.encryptedSecrets = safeStorage
+        metadata.encryptedSecrets = this.secretStorage
           .encryptString(JSON.stringify(secret))
           .toString("base64");
       }
@@ -684,6 +701,18 @@ export class AccountService {
       this.microsoftDeviceSession === session &&
       session.run === this.microsoftRun &&
       !session.abort.signal.aborted
+    );
+  }
+
+  isMicrosoftDeviceChallengeActive(
+    challenge: MicrosoftDeviceChallenge,
+  ): boolean {
+    const session = this.microsoftDeviceSession;
+    return !!(
+      session &&
+      session.challenge === challenge &&
+      this.deviceActive(session) &&
+      session.expiresAt > this.deviceNow()
     );
   }
 
@@ -1372,7 +1401,7 @@ export class AccountService {
       uuid: profile.id,
       accessToken: minecraft.access_token,
       refreshToken: token.refresh_token ?? previous?.refreshToken,
-      // Keep the app id with the refresh token, encrypted by safeStorage alongside the secret fields.
+      // Keep the app id with the refresh token, encrypted by the host alongside the secret fields.
       clientToken: clientId,
       expiresAt: Date.now() + (Number(minecraft.expires_in) || 86400) * 1000,
       skins: normalizeTextures(profile.skins),

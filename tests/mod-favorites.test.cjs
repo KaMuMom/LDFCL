@@ -5,9 +5,9 @@ const os = require("node:os");
 const path = require("node:path");
 const compiledRoot =
   process.env.LDFCL_TEST_COMPILED_ROOT ||
-  path.join(__dirname, "..", "dist-electron");
+  path.join(__dirname, "..", "core", "dist");
 const { ModFavorites } = require(
-  path.join(compiledRoot, "electron/services/mod-favorites.js"),
+  path.join(compiledRoot, "core/services/mod-favorites.js"),
 );
 async function fixture(t) {
   const root = await fs.mkdtemp(

@@ -8,11 +8,11 @@ const Zip = require("adm-zip");
 const {
   ContentService,
   contentSafety,
-} = require("../dist-electron/electron/services/content.js");
+} = require("@ldfcl/core/services/content");
 const {
   ModTranslationCatalog,
   BUILTIN_MOD_TRANSLATIONS,
-} = require("../dist-electron/electron/services/mod-translations.js");
+} = require("@ldfcl/core/services/mod-translations");
 
 async function fixture(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "ldfcl-content-test-"));
@@ -1164,7 +1164,9 @@ test("a corrupt download never publishes an installable file and cleans partial 
   );
   assert.equal(requests, 3);
   await assert.rejects(fs.access(target));
-  assert.deepEqual(await fs.readdir(path.dirname(target)), []);
+  const destinationFiles = await fs.readdir(path.dirname(target)).catch((error) => { if (error.code === "ENOENT") return []; throw error; });
+  assert.deepEqual(destinationFiles, []);
+  assert.deepEqual(await fs.readdir(path.join(root, "cache", "content-artifacts")), [], "hash failures clean stable artifact partials as well as transaction output");
 });
 
 test("cached content validates every supplied hash and size while failed replacements preserve the original", async (t) => {

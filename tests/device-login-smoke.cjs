@@ -33,13 +33,18 @@ const assert = require("node:assert/strict");
     await page
       .getByRole("heading", { name: "开始游戏", exact: true })
       .waitFor();
-    await app.evaluate(({ shell, clipboard, BrowserWindow }) => {
+    await app.evaluate(({ shell, clipboard, BrowserWindow, ipcMain }) => {
       const qa = (globalThis.__ldfclDeviceQA = {
         mode: "pending",
         challenges: 0,
         polls: 0,
         aborted: 0,
         opened: [],
+        copies: [],
+        timeline: [],
+        failClipboard: false,
+        dispatchPayloads: [],
+        settingsPayloads: [],
         grants: [],
         focus: 0,
         show: 0,
@@ -51,6 +56,23 @@ const assert = require("node:assert/strict");
         clipboardText: clipboard.readText(),
         originalFetch: globalThis.fetch,
         originalExternal: shell.openExternal,
+        originalClipboardWrite: clipboard.writeText,
+      });
+      clipboard.writeText = (text, ...args) => {
+        qa.copies.push(text);
+        qa.timeline.push({ kind: "copy", text });
+        if (qa.failClipboard) throw Error("controlled clipboard failure");
+        return qa.originalClipboardWrite.call(clipboard, text, ...args);
+      };
+      const originalIPC = ipcMain._invokeHandlers.get("launcher:call");
+      if (typeof originalIPC !== "function")
+        throw Error("Launcher IPC handler missing");
+      ipcMain.removeHandler("launcher:call");
+      ipcMain.handle("launcher:call", async (event, method, payload) => {
+        if (method === "account:microsoft")
+          qa.dispatchPayloads.push(payload ?? null);
+        if (method === "settings") qa.settingsPayloads.push(payload);
+        return originalIPC(event, method, payload);
       });
       const files = process.getBuiltinModule("fs/promises");
       qa.originalWriteFile = files.writeFile;
@@ -107,13 +129,18 @@ const assert = require("node:assert/strict");
             hasSecret: form.has("client_secret"),
           });
           if (qa.mode === "challenge-hold") return heldRequest(init.signal);
-          return json({
+          const challenge = {
             device_code: `fixture-private-device-code-${qa.challenges}`,
             user_code: "ABCD-EFGH",
             verification_uri: "https://microsoft.com/devicelogin",
             expires_in: 600,
             interval: 1,
-          });
+          };
+          if (qa.mode === "challenge-late")
+            return new Promise((resolve) => {
+              qa.releaseChallenge = () => resolve(json(challenge));
+            });
+          return json(challenge);
         }
         if (url.endsWith("/token")) {
           qa.polls++;
@@ -168,10 +195,11 @@ const assert = require("node:assert/strict");
             skins: [],
             capes: [],
           });
-        return qa.originalFetch(input, init);
+        throw new Error(`Unexpected fixture network request: ${url}`);
       };
       shell.openExternal = async (url) => {
         qa.opened.push(url);
+        qa.timeline.push({ kind: "browser", url });
         if (qa.holdExternal) {
           qa.holdExternal = false;
           return new Promise((_resolve, reject) => {
@@ -197,6 +225,10 @@ const assert = require("node:assert/strict");
           aborted: qa.aborted,
           challenges: qa.challenges,
           opened: qa.opened,
+          copies: qa.copies,
+          timeline: qa.timeline,
+          dispatchPayloads: qa.dispatchPayloads,
+          settingsPayloads: qa.settingsPayloads,
           grants: qa.grants,
           focus: qa.focus,
           show: qa.show,
@@ -237,15 +269,40 @@ const assert = require("node:assert/strict");
       });
       if (!(await field.isVisible()))
         await page.locator(".auth-config summary").click();
-      await field.fill(clientId);
+      assert.equal(await field.getAttribute("type"), "password");
+      assert.equal(await field.inputValue(), "");
+      const state = await page.evaluate(() => window.launcher.call("state"));
+      assert.equal(state.settings.microsoftClientId, "");
+      if (!state.settings.microsoftClientIdConfigured)
+        await field.fill(clientId);
+      else {
+        assert.equal(state.settings.microsoftClientIdStorageStatus, "ready");
+        await page
+          .getByText("Client ID 已加密保存。留空继续使用，输入新值可替换。", {
+            exact: true,
+          })
+          .waitFor();
+      }
     };
-    const start = async (mode = "hold") => {
+    const start = async (mode = "hold", automaticallyCopied = true) => {
       await setMode(mode);
       const before = await mainState();
       await button("开始微软登录").click();
-      if (!["challenge-network", "challenge-hold"].includes(mode)) {
+      if (
+        !["challenge-network", "challenge-hold", "challenge-late"].includes(
+          mode,
+        )
+      ) {
         await page.getByText("等待微软授权", { exact: true }).waitFor();
         await page.locator(".device-code-value").waitFor();
+        await page
+          .getByText(
+            automaticallyCopied
+              ? "授权码已自动复制，可在微软页面直接粘贴。"
+              : "未能自动复制授权码，请使用“复制授权码”按钮或手动输入。",
+            { exact: true },
+          )
+          .waitFor();
       }
       return before;
     };
@@ -319,16 +376,17 @@ const assert = require("node:assert/strict");
     await page.waitForTimeout(600);
     assert.equal((await mainState()).challenges, 0);
     assert.deepEqual((await mainState()).opened, []);
+    assert.deepEqual((await mainState()).copies, []);
     checks.push(
       "closing before settings IPC completes prevents late authorization dispatch",
     );
 
     await openAccount();
-    const challenge = await page.evaluate(
-      (value) => window.launcher.call("account:microsoft", { clientId: value }),
-      clientId,
+    const challenge = await page.evaluate(() =>
+      window.launcher.call("account:microsoft"),
     );
     assert.deepEqual(Object.keys(challenge).sort(), [
+      "codeCopied",
       "expiresIn",
       "flow",
       "interval",
@@ -343,12 +401,21 @@ const assert = require("node:assert/strict");
     );
     assert.equal(challenge.interval, 1);
     assert.equal(challenge.expiresIn, 600);
+    assert.equal(challenge.codeCopied, true);
     await page.getByText("等待微软授权", { exact: true }).waitFor();
     assert.equal(
       await page.locator(".device-code-value").innerText(),
       "ABCD-EFGH",
     );
     assert.deepEqual((await mainState()).opened, [challenge.verificationUri]);
+    assert.deepEqual((await mainState()).copies, ["ABCD-EFGH"]);
+    assert.deepEqual((await mainState()).timeline.slice(0, 2), [
+      { kind: "copy", text: "ABCD-EFGH" },
+      { kind: "browser", url: challenge.verificationUri },
+    ]);
+    await page
+      .getByText("授权码已自动复制，可在微软页面直接粘贴。", { exact: true })
+      .waitFor();
     await button("复制授权码").click();
     await button("复制授权码").getByText("已复制", { exact: true }).waitFor();
     assert.equal(
@@ -361,34 +428,32 @@ const assert = require("node:assert/strict");
       challenge.verificationUri,
     ]);
     await waitForMain((state) => state.polls > 0, "authorization_pending poll");
+    assert.equal((await mainState()).copies.length, 1);
     assert(await page.getByText("等待微软授权", { exact: true }).isVisible());
     await page.screenshot({ path: path.join(output, "device-login.png") });
     await button("取消本次登录").click();
     await button("开始微软登录").waitFor();
     checks.push(
       "public device challenge and pending status",
-      "copy code and reopen browser",
+      "device code automatically copied once before browser opens; manual copy and reopen remain available",
     );
 
     await app.evaluate(() => {
       globalThis.__ldfclDeviceQA.holdExternal = true;
     });
-    await page.evaluate((value) => {
+    await page.evaluate(() => {
       window.__oldDeviceDispatch = window.launcher
-        .call("account:microsoft", { clientId: value })
+        .call("account:microsoft")
         .catch((error) => {
           window.__oldDeviceDispatchError = error.message;
         });
-    }, clientId);
+    });
     const oldBrowser = await waitForMain(
       (state) => state.opened.length === 3,
       "held old browser dispatch",
     );
     await page.evaluate(() => window.launcher.call("account:cancel"));
-    await page.evaluate(
-      (value) => window.launcher.call("account:microsoft", { clientId: value }),
-      clientId,
-    );
+    await page.evaluate(() => window.launcher.call("account:microsoft"));
     await page.getByText("等待微软授权", { exact: true }).waitFor();
     await app.evaluate(() => {
       globalThis.__ldfclDeviceQA.rejectExternal(
@@ -442,11 +507,69 @@ const assert = require("node:assert/strict");
     await page.getByRole("dialog").waitFor({ state: "hidden" });
     await assertStopped(fetching, "close while obtaining device code");
     assert.equal((await mainState()).opened.length, fetching.opened.length);
+    assert.equal((await mainState()).copies.length, fetching.copies.length);
     checks.push(
-      "closing during initial device-code request aborts and prevents browser dispatch",
+      "closing during initial device-code request aborts and prevents both clipboard changes and browser dispatch",
     );
 
     await openAccount();
+    const late = await start("challenge-late");
+    await waitForMain(
+      (state) => state.challenges > late.challenges,
+      "late initial challenge request",
+    );
+    await button("关闭弹窗").click();
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+    await app.evaluate(() => globalThis.__ldfclDeviceQA.releaseChallenge());
+    await page.waitForTimeout(250);
+    const stale = await mainState();
+    assert.equal(stale.opened.length, late.opened.length);
+    assert.equal(stale.copies.length, late.copies.length);
+    assert.equal(stale.polls, late.polls);
+    checks.push(
+      "cancelled initial request that resolves late cannot copy a stale code, open a browser or start polling",
+    );
+
+    await openAccount();
+    await app.evaluate(({ clipboard }) => {
+      const qa = globalThis.__ldfclDeviceQA;
+      qa.originalClipboardWrite.call(clipboard, "clipboard-preserved-on-error");
+      qa.failClipboard = true;
+    });
+    const copyFailure = await start("pending", false);
+    const failedCopy = await waitForMain(
+      (state) => state.opened.length > copyFailure.opened.length,
+      "browser still opens after clipboard failure",
+    );
+    assert.equal(failedCopy.copies.length, copyFailure.copies.length + 1);
+    assert.equal(
+      await app.evaluate(({ clipboard }) => clipboard.readText()),
+      "clipboard-preserved-on-error",
+    );
+    assert.equal(await button("复制授权码").innerText(), "复制授权码");
+    await waitForMain(
+      (state) => state.polls > copyFailure.polls,
+      "clipboard failure does not block polling",
+    );
+    assert.equal((await mainState()).copies.length, failedCopy.copies.length);
+    await app.evaluate(() => {
+      globalThis.__ldfclDeviceQA.failClipboard = false;
+    });
+    await button("复制授权码").click();
+    await button("复制授权码").getByText("已复制", { exact: true }).waitFor();
+    await page
+      .getByText("授权码已复制，可在微软页面直接粘贴。", { exact: true })
+      .waitFor();
+    assert.equal(
+      await app.evaluate(({ clipboard }) => clipboard.readText()),
+      "ABCD-EFGH",
+    );
+    await button("取消本次登录").click();
+    await button("开始微软登录").waitFor();
+    checks.push(
+      "automatic clipboard failure keeps browser authorization and polling active, reports failure honestly, and manual copy recovers",
+    );
+
     for (const mode of ["challenge-network", "token-certificate", "denied"]) {
       const before = await start(mode);
       if (mode !== "challenge-network")
@@ -485,6 +608,7 @@ const assert = require("node:assert/strict");
       (state) => state.polls > recovered.polls,
       "automatic network recovery retry",
     );
+    assert.equal((await mainState()).copies.length, recovered.copies.length);
     assert.equal(
       await page.locator(".device-code-value").innerText(),
       "ABCD-EFGH",
@@ -573,6 +697,7 @@ const assert = require("node:assert/strict");
       "fixture-microsoft-access-token",
       "fixture-microsoft-refresh-token",
       "fixture-minecraft-access-token",
+      clientId,
     ])
       assert.equal(
         serialized.includes(secret),
@@ -585,6 +710,19 @@ const assert = require("node:assert/strict");
       ),
     );
     assert(completed.grants.every((grant) => !grant.hasSecret));
+    assert(completed.dispatchPayloads.every((payload) => payload === null));
+    assert.equal(completed.settingsPayloads.length, 1);
+    assert.deepEqual(completed.settingsPayloads[0], {
+      microsoftClientId: clientId,
+    });
+    assert.equal(state.settings.microsoftClientId, "");
+    assert.equal(state.settings.microsoftClientIdConfigured, true);
+    assert.equal(state.settings.microsoftClientIdStorageStatus, "ready");
+    const persisted = await fs.readFile(
+      path.join(dir, "launcher.json"),
+      "utf8",
+    );
+    assert.equal(persisted.includes(clientId), false);
     assert(
       completed.grants
         .filter((grant) => grant.kind === "token")
@@ -597,7 +735,7 @@ const assert = require("node:assert/strict");
       "controlled Microsoft/Xbox/Minecraft success selects account and focuses window",
     );
     checks.push(
-      "private device code and tokens stay out of renderer IPC and events",
+      "private device code, tokens and saved Client ID stay out of renderer state/events; account dispatch has no Client ID and launcher.json contains no plaintext ID",
     );
     assert.deepEqual(errors, []);
     console.log(
@@ -616,9 +754,11 @@ const assert = require("node:assert/strict");
         if (!qa) return;
         globalThis.fetch = qa.originalFetch;
         shell.openExternal = qa.originalExternal;
+        clipboard.writeText = qa.originalClipboardWrite;
         process.getBuiltinModule("fs/promises").writeFile =
           qa.originalWriteFile;
         qa.releaseSettings?.();
+        qa.releaseChallenge?.();
         qa.rejectExternal?.(new Error("test cleanup"));
         clipboard.writeText(qa.clipboardText);
       })

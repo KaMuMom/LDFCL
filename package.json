@@ -1,6 +1,6 @@
 {
   "name": "ldfcl",
-  "version": "0.5.0",
+  "version": "0.6.2-beta.1",
   "private": true,
   "description": "LDFCL — Liquid Dream Fabric Craft Launcher",
   "author": "LDFCL Contributors",
@@ -8,10 +8,13 @@
   "main": "dist-electron/electron/main.js",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc -p tsconfig.electron.json && tsc -p tsconfig.json && vite build",
+    "build": "npm run build:main && tsc -p tsconfig.json && vite build",
     "start": "electron .",
     "dist": "npm run build && electron-builder --win portable --x64",
-    "test": "node --test tests/*.test.cjs"
+    "test": "npm run build:main && node --test tests/*.test.cjs",
+    "build:core": "tsc -p core/tsconfig.json",
+    "build:main": "node scripts/clean-main.cjs && npm run build:core && tsc -p tsconfig.electron.json",
+    "cli": "node bin/ldfcl-cli.cjs"
   },
   "dependencies": {
     "adm-zip": "^0.5.16",
@@ -20,7 +23,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "skinview-utils": "^0.7.1",
-    "skinview3d": "^3.4.2"
+    "skinview3d": "^3.4.2",
+    "@ldfcl/core": "0.6.2-beta.1"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.7",
@@ -51,7 +55,8 @@
       "THIRD_PARTY_NOTICES.md",
       "VALIDATION.md",
       "CREDITS.md",
-      "docs/**/*"
+      "docs/**/*",
+      "bin/**/*"
     ],
     "win": {
       "target": [
@@ -64,5 +69,11 @@
     "portable": {
       "requestExecutionLevel": "user"
     }
+  },
+  "workspaces": [
+    "core"
+  ],
+  "bin": {
+    "ldfcl-cli": "bin/ldfcl-cli.cjs"
   }
 }

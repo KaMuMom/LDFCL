@@ -9,12 +9,10 @@ const { createHash } = require("node:crypto");
 const AdmZip = require("adm-zip");
 const compiled =
   process.env.LDFCL_TEST_COMPILED_ROOT ||
-  path.join(__dirname, "..", "dist-electron");
-const { GameService } = require(
-  path.join(compiled, "electron/services/game.js"),
-);
+  path.join(__dirname, "..", "core", "dist");
+const { GameService } = require(path.join(compiled, "core/services/game.js"));
 const { scanGameDirectory } = require(
-  path.join(compiled, "electron/game-directories.js"),
+  path.join(compiled, "core/game-directories.js"),
 );
 const hash = (bytes, algorithm = "sha256") =>
   createHash(algorithm).update(bytes).digest("hex");

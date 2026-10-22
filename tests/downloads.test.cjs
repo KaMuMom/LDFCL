@@ -8,7 +8,7 @@ const { createHash } = require("node:crypto");
 const {
   DownloadManager,
   requestJson,
-} = require("../dist-electron/electron/services/downloads.js");
+} = require("@ldfcl/core/services/downloads");
 const {
   taskProgressPercent,
 } = require("../dist-electron/shared/task-progress.js");
@@ -153,13 +153,16 @@ test("size caps apply to chunked bodies and HTTPS constraints reject before tran
   assert.deepEqual(await fs.readdir(directory), []);
 });
 test("batch progress includes partial bytes while validation stays below completion", async (t) => {
+  let finishBody;
   const { directory, url } = await fixture(t, (_, res) => {
     res.writeHead(200, { "Content-Length": 8 });
+    res.flushHeaders();
+    const timer = setTimeout(() => res.end("5678"), 2000);
+    finishBody = () => { clearTimeout(timer); res.end("5678"); };
     res.write("1234");
-    setTimeout(() => res.end("5678"), 30);
   });
   const events = [];
-  const manager = new DownloadManager(directory, (e) => events.push(e.task));
+  const manager = new DownloadManager(directory, (e) => { events.push(e.task); if (e.task.status === "running" && e.task.progress > 0 && e.task.progress < 0.99) finishBody?.(); });
   await manager.downloadMany([
     { url, path: path.join(directory, "partial"), size: 8 },
   ]);

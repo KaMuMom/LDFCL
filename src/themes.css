@@ -1,0 +1,151 @@
+:root[data-theme="dark"] {
+  color: #dce7f7;
+  background: #111821;
+  color-scheme: dark;
+  --accent: #91b4ff;
+  --accent-hover: #abc5ff;
+  --accent-soft: #7cafff24;
+  --muted: #a5b5ca;
+  --border: #aec8ed28;
+  --surface: #263345c9;
+  --surface-raised: #28354bf5;
+  --shadow: 0 14px 42px #0003, inset 0 1px 0 #ffffff12;
+  --danger: #ff9eae;
+  --success: #7ad8be;
+}
+[data-theme="dark"] .app-backdrop {
+  background: linear-gradient(135deg, #151c2b, #1c2436 55%, #142725);
+}
+[data-theme="dark"] .app-backdrop span {
+  opacity: 0.16;
+}
+[data-theme="dark"] .glass-surface {
+  border-color: var(--border);
+}
+[data-theme="dark"] .glass-backdrop::after,
+[data-theme="dark"] .sidebar .glass-backdrop::after {
+  background: linear-gradient(125deg, #243044ee, #263345ed 45%, #1e2b3ee8);
+  box-shadow: inset 0 1px 0 #ffffff0c;
+}
+[data-theme="dark"]
+  :where(
+    input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not(
+        [type="color"]
+      ),
+    select,
+    textarea
+  ) {
+  color: #e2eafb;
+  background: #172234;
+  border-color: #a9c6ef3a;
+}
+[data-theme="dark"] option {
+  background: #172234;
+  color: #e2eafb;
+}
+[data-theme="dark"]
+  :where(
+    p,
+    .muted,
+    .nav-item,
+    .version-choice-meta,
+    .instance-path,
+    .instance-detail-caption,
+    .sidebar-bottom,
+    .titlebar,
+    .setting-row p,
+    .directory-details p,
+    .task-row p,
+    .tabs button,
+    .segmented button
+  ) {
+  color: var(--muted);
+}
+[data-theme="dark"]
+  :where(
+    h1,
+    h2,
+    h3,
+    strong,
+    label,
+    .btn,
+    .home-version-caption,
+    .version-choice,
+    .instance-detail-copy,
+    .modal
+  ) {
+  color: inherit;
+}
+[data-theme="dark"]
+  :where(
+    .btn.subtle,
+    .folder-card,
+    .version-choice,
+    .info-grid > div,
+    .notice,
+    .memory-visual,
+    .segmented,
+    .tabs,
+    .directory-list,
+    .game-directory-row,
+    .skin-library-card,
+    .content-card,
+    .field-group,
+    .instance-rename-card
+  ) {
+  background: #29374a94;
+  border-color: var(--border);
+}
+[data-theme="dark"]
+  :where(
+    .selected,
+    .active,
+    .btn:hover,
+    .folder-card:hover,
+    .nav-item:hover,
+    .version-choice.selected,
+    .game-directory-row.selected
+  ) {
+  background: #6997e32b;
+  color: #bfd3ff;
+}
+[data-theme="dark"] .btn.primary {
+  background: #466ed0;
+  color: white;
+}
+[data-theme="dark"] .modal-backdrop {
+  background: #050a16a8;
+}
+[data-theme="dark"] .console,
+[data-theme="dark"] pre {
+  background: #101724;
+  color: #cedbeb;
+}
+[data-theme="dark"]
+  :where(
+    .badge,
+    .quick-icon,
+    .instance-icon,
+    .instance-detail-emblem,
+    .empty-icon
+  ) {
+  background: #759bd42b;
+  color: #bad2ff;
+}
+[data-theme="dark"] .home-topline .health-panel {
+  background: #25354aab;
+}
+[data-theme="dark"] .error-box,
+[data-theme="dark"] .danger-zone {
+  background: #572b3b66;
+  border-color: #c9819844;
+}
+.home-topline > .health-panel {
+  margin: 0;
+  max-width: 55%;
+}
+@media (max-width: 1000px) {
+  .home-topline > .health-panel {
+    max-width: 60%;
+  }
+}

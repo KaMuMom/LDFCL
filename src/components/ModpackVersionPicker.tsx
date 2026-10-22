@@ -23,7 +23,9 @@ const releaseName = { release: "正式版", beta: "测试版", alpha: "预览版
 const supported = (version: ModpackVersion) =>
   !version.loaders.length ||
   version.loaders.some((loader) =>
-    ["fabric", "quilt", "forge", "minecraft", "vanilla"].includes(loader),
+    ["fabric", "quilt", "forge", "neoforge", "minecraft", "vanilla"].includes(
+      loader,
+    ),
   );
 const fileSize = (bytes: number) =>
   bytes >= 1048576

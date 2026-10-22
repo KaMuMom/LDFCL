@@ -9,7 +9,7 @@ export interface Instance {
   id: string;
   name: string;
   version: string;
-  loader: "vanilla" | "fabric" | "quilt" | "forge" | "optifine";
+  loader: "vanilla" | "fabric" | "quilt" | "forge" | "neoforge" | "optifine";
   loaderVersion?: string;
   gameDirectoryId?: string;
   importedVersionId?: string;
@@ -17,6 +17,7 @@ export interface Instance {
   createdAt: string;
   lastPlayed?: string;
   javaPath?: string;
+  jvmArgs?: string[];
   memoryMb?: number;
   gameSettings: Record<string, string | number | boolean>;
 }
@@ -33,15 +34,23 @@ export interface Account {
   skins?: any[];
   capes?: any[];
 }
+export type MicrosoftClientIdStorageStatus =
+  "ready" | "empty" | "migration-pending" | "unavailable" | "unreadable";
 export interface Settings {
   downloadConcurrency: number;
   memoryMode: "auto" | "manual";
   memoryMb: number;
   javaPath: string;
+  jvmArgs?: string[];
   microsoftClientId: string;
+  microsoftClientIdConfigured?: boolean;
+  microsoftClientIdStorageStatus?: MicrosoftClientIdStorageStatus;
   closeOnLaunch: boolean;
   gameDefaults?: Record<string, string | number | boolean>;
   gameRoot?: string;
+  downloadSource?: "official" | "bmclapi";
+  theme?: "light" | "dark" | "system";
+  gamePreset?: "custom" | "performance" | "balanced" | "quality" | "cinematic";
 }
 export interface FavoriteMod {
   projectId: string;
@@ -66,6 +75,8 @@ export interface Task {
   progress: number;
   status: string;
   detail?: string;
+  controllable?: boolean;
+  source?: "official" | "bmclapi";
 }
 export interface ModpackVersion {
   id: string;

@@ -277,14 +277,10 @@ const AdmZip = require("adm-zip");
         const requireApp = process
           .getBuiltinModule("module")
           .createRequire(paths.join(app.getAppPath(), "package.json"));
-        const { GameService } = requireApp(
-          "./dist-electron/electron/services/game.js",
-        );
-        const { ContentService } = requireApp(
-          "./dist-electron/electron/services/content.js",
-        );
+        const { GameService } = requireApp("@ldfcl/core/services/game");
+        const { ContentService } = requireApp("@ldfcl/core/services/content");
         const { allocateVersionDirectory } = requireApp(
-          "./dist-electron/electron/instance-paths.js",
+          "@ldfcl/core/instance-paths",
         );
         const q = (globalThis.__ldfclPackQA = {
           mode: "normal",
@@ -479,15 +475,14 @@ const AdmZip = require("adm-zip");
         .isDisabled(),
       true,
     );
-    assert.equal(await radio("neoq0001").isDisabled(), true);
-    await dialog()
-      .getByText("暂不支持此加载器，请选择其他版本", { exact: true })
-      .waitFor();
+    assert.equal(await radio("neoq0001").isDisabled(), false);
+    await radio("neoq0001").check();
+    assert.equal(await dialog().getByRole("button", { name: "安装所选版本", exact: true }).isEnabled(), true, "NeoForge releases can now be selected");
     assert.deepEqual((await qa()).downloadCalls, []);
     assert.deepEqual((await qa()).installCalls, []);
     assert.equal((await state()).instances.length, 0);
     checks.push(
-      "opening the real picker downloads no pack and creates no instance; explicit selection and unsupported-loader guard",
+      "opening the real picker downloads no pack and creates no instance; explicit selection supports NeoForge releases",
     );
 
     await dialog()
@@ -932,11 +927,10 @@ const AdmZip = require("adm-zip");
         const requireApp = process
           .getBuiltinModule("module")
           .createRequire(paths.join(app.getAppPath(), "package.json"));
+        requireApp("@ldfcl/core/services/game").GameService.prototype.install =
+          q.originalInstall;
         requireApp(
-          "./dist-electron/electron/services/game.js",
-        ).GameService.prototype.install = q.originalInstall;
-        requireApp(
-          "./dist-electron/electron/services/content.js",
+          "@ldfcl/core/services/content",
         ).ContentService.prototype.downloadPack = q.originalDownload;
         globalThis.fetch = q.originalFetch;
         q.heldVersions.splice(0).forEach((resolve) => resolve());

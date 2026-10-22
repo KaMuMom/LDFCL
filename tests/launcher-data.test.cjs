@@ -5,9 +5,9 @@ const os = require("node:os");
 const path = require("node:path");
 const compiledRoot =
   process.env.LDFCL_TEST_COMPILED_ROOT ||
-  path.join(__dirname, "..", "dist-electron");
+  path.join(__dirname, "..", "core", "dist");
 const { prepareLauncherDataDirectory } = require(
-  path.join(compiledRoot, "electron", "launcher-data.js"),
+  path.join(compiledRoot, "core", "launcher-data.js"),
 );
 
 async function fixture(t) {

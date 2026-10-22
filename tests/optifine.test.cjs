@@ -6,17 +6,15 @@ const os = require("node:os");
 const AdmZip = require("adm-zip");
 const compiled =
   process.env.LDFCL_TEST_COMPILED_ROOT ||
-  path.join(__dirname, "..", "dist-electron");
-const optifine = require(path.join(compiled, "electron/services/optifine.js"));
-const java = require(path.join(compiled, "electron/services/java.js"));
-const { GameService } = require(
-  path.join(compiled, "electron/services/game.js"),
-);
+  path.join(__dirname, "..", "core", "dist");
+const optifine = require(path.join(compiled, "core/services/optifine.js"));
+const java = require(path.join(compiled, "core/services/java.js"));
+const { GameService } = require(path.join(compiled, "core/services/game.js"));
 const { scanGameDirectory } = require(
-  path.join(compiled, "electron/game-directories.js"),
+  path.join(compiled, "core/game-directories.js"),
 );
 const { OPTIFINE_BRIDGE } = require(
-  path.join(compiled, "electron/services/optifine-bridge.js"),
+  path.join(compiled, "core/services/optifine-bridge.js"),
 );
 const mc = "1.12.2";
 const raw = (patch = "G5", extra = {}) => ({

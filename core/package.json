@@ -1,0 +1,44 @@
+{
+  "name": "@ldfcl/core",
+  "version": "0.6.2-beta.1",
+  "private": true,
+  "description": "Host-independent Minecraft launcher services for LDFCL",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "./dist/core/index.js",
+  "types": "./dist/core/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/core/index.d.ts",
+      "default": "./dist/core/index.js"
+    },
+    "./services/*": {
+      "types": "./dist/core/services/*.d.ts",
+      "default": "./dist/core/services/*.js"
+    },
+    "./shared/*": {
+      "types": "./dist/shared/*.d.ts",
+      "default": "./dist/shared/*.js"
+    },
+    "./*": {
+      "types": "./dist/core/*.d.ts",
+      "default": "./dist/core/*.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2"
+  }
+}

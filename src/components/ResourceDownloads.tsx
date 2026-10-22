@@ -48,9 +48,11 @@ const message = (e: any) =>
 const loaderName = (value: string) =>
   value === "vanilla"
     ? "原版"
-    : value === "optifine"
-      ? "OptiFine"
-      : value[0].toUpperCase() + value.slice(1);
+    : value === "neoforge"
+      ? "NeoForge"
+      : value === "optifine"
+        ? "OptiFine"
+        : value[0].toUpperCase() + value.slice(1);
 
 export default function ResourceDownloads({
   active = true,
@@ -342,7 +344,14 @@ function GameDownload({
             disabled={busy}
             onChange={(e) => setLoader(e.target.value)}
           >
-            {["vanilla", "fabric", "quilt", "forge", "optifine"].map((l) => (
+            {[
+              "vanilla",
+              "fabric",
+              "quilt",
+              "forge",
+              "neoforge",
+              "optifine",
+            ].map((l) => (
               <option key={l} value={l}>
                 {loaderName(l)}
               </option>

@@ -9,11 +9,8 @@ const {
   validateGameOptions,
   effectiveGameOptions,
 } = require("../dist-electron/shared/game-settings.js");
-const {
-  Store,
-  validateSettings,
-} = require("../dist-electron/electron/store.js");
-const { GameService } = require("../dist-electron/electron/services/game.js");
+const { Store, validateSettings } = require("@ldfcl/core/store");
+const { GameService } = require("@ldfcl/core/services/game");
 
 async function temporary(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "LDFCL-game-settings-"));

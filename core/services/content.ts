@@ -5,6 +5,7 @@ import AdmZip from "adm-zip";
 import type { Instance, ModpackVersion } from "../../shared/types";
 import { LAUNCHER_USER_AGENT } from "../../shared/launcher";
 import {
+  assertInstanceGameDirectory,
   assertPlainTree,
   instanceGameDirectory,
   instanceVersionDirectoryId,
@@ -15,6 +16,7 @@ import {
 } from "./mod-translations";
 import { readModMetadata, findDuplicateMods } from "./mod-metadata";
 import { DownloadManager } from "./downloads";
+import { replaceStorageFile } from "./content-store";
 
 const API = "https://api.modrinth.com/v2";
 const MAX_ARCHIVE = 1024 * 1024 * 1024;
@@ -230,16 +232,47 @@ export class ContentService {
     size?: number,
   ): Promise<void> {
     this.downloads.concurrency = this.getConcurrency();
-    await this.downloads.downloadVerified({
-      url,
-      path: dest,
-      sha1: hashes.sha1,
-      sha256: hashes.sha256,
-      sha512: hashes.sha512,
-      size,
-      maxBytes: MAX_ARCHIVE,
-      requireHttps: true,
-    });
+    // A new install transaction has a fresh staging name. Keep its network
+    // artifact identity stable so a reissued request can reuse a retained .part.
+    const identity = createHash("sha256")
+      .update(
+        JSON.stringify({
+          url,
+          sha1: hashes.sha1,
+          sha256: hashes.sha256,
+          sha512: hashes.sha512,
+          size,
+        }),
+      )
+      .digest("hex");
+    const cached = path.join(
+      this.dataDir,
+      "cache",
+      "content-artifacts",
+      identity,
+    );
+    await this.downloads.downloadVerified(
+      {
+        url,
+        path: cached,
+        sha1: hashes.sha1,
+        sha256: hashes.sha256,
+        sha512: hashes.sha512,
+        size,
+        maxBytes: MAX_ARCHIVE,
+        requireHttps: true,
+      },
+      `下载 ${path.basename(dest).replace(/^[a-f0-9-]{36}-/i, "")}`,
+    );
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    const stage = `${dest}.${randomUUID()}.copy`;
+    try {
+      await fs.copyFile(cached, stage, 1);
+      await fs.chmod(stage, 0o600);
+      await replaceStorageFile(stage, dest);
+    } finally {
+      await fs.rm(stage, { force: true });
+    }
   }
 
   private async parallel<T>(
@@ -1021,11 +1054,13 @@ export class ContentService {
     instance: Instance,
     kind: "resourcepack" | "shader",
   ): Promise<any[]> {
+    await assertInstanceGameDirectory(this.minecraftRoot, instance);
     const dir = path.join(
       this.instanceDir(instance),
       kind === "resourcepack" ? "resourcepacks" : "shaderpacks",
     );
     await fs.mkdir(dir, { recursive: true });
+    await assertPlainTree(dir);
     const result = [];
     for (const item of await fs.readdir(dir, { withFileTypes: true }))
       if (item.isFile()) {
@@ -1040,15 +1075,22 @@ export class ContentService {
     instance: Instance,
     kind: "resourcepack" | "shader",
   ): Promise<any> {
+    await assertInstanceGameDirectory(this.minecraftRoot, instance);
     const dir = path.join(
       this.instanceDir(instance),
       kind === "resourcepack" ? "resourcepacks" : "shaderpacks",
     );
     await fs.mkdir(dir, { recursive: true });
+    await assertPlainTree(dir);
     const files = [];
     for (const source of paths) {
       const name = safeFile(path.basename(source));
       if (!/\.zip$/i.test(name)) throw new Error("资源包和光影包必须为 .zip");
+      await assertPlainTree(source);
+      const stat = await fs.lstat(source);
+      if (!stat.isFile() || stat.size > MAX_ARCHIVE)
+        throw new Error("导入的资源包不是有效的普通文件或超过 1 GiB");
+      new AdmZip(source).getEntries();
       await fs.copyFile(source, path.join(dir, name), 1);
       files.push(name);
     }

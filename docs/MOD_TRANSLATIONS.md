@@ -27,6 +27,6 @@
 
 参考并感谢 [CFPAOrg/Minecraft-Mod-Language-Package](https://github.com/CFPAOrg/Minecraft-Mod-Language-Package) 的作者与社区贡献者。该项目主要维护游戏内语言资源。2026-10-20 实际查阅其 [`LICENSE`](https://github.com/CFPAOrg/Minecraft-Mod-Language-Package/blob/main/LICENSE)，为 **CC BY-NC-SA 4.0**（署名、非商业性使用、相同方式共享）。本次 GitHub API/raw 连接不稳定，通过 [jsDelivr 对该 GitHub 文件的镜像](https://cdn.jsdelivr.net/gh/CFPAOrg/Minecraft-Mod-Language-Package@main/LICENSE) 核实正文。
 
-LDFCL **未复制、下载打包或重新许可 CFPA 的语言数据**，也不将该社区列为本项目中文简介的作者。用户若单独使用其资源，应遵守其许可。内置目录源码见 `electron/services/mod-translations.ts`。
+LDFCL **未复制、下载打包或重新许可 CFPA 的语言数据**，也不将该社区列为本项目中文简介的作者。用户若单独使用其资源，应遵守其许可。内置目录源码见 `core/services/mod-translations.ts`。
 
 项目身份和作者信息来自 [Modrinth API](https://docs.modrinth.com/api/)。卡片保留 Modrinth 返回的作者名，并链接原项目页面；这不等于相关模组作者参与了本启动器开发。

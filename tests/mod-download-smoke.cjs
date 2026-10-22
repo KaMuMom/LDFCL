@@ -204,7 +204,8 @@ const Zip = require("adm-zip");
     await visit(directory);
     return files;
   }
-  const originalA = await snapshot(instanceDir(instances[0]));
+  const originalUserA = await snapshot(instanceDir(instances[0]));
+  let originalA;
   const originalBProfile = await fs.readFile(
     path.join(instanceDir(instances[1]), "B-Fabric.json"),
   );
@@ -250,9 +251,7 @@ const Zip = require("adm-zip");
         const requireApp = process
           .getBuiltinModule("module")
           .createRequire(paths.join(app.getAppPath(), "package.json"));
-        const { ContentService } = requireApp(
-          "./dist-electron/electron/services/content.js",
-        );
+        const { ContentService } = requireApp("@ldfcl/core/services/content");
         const q = (globalThis.__ldfclModQA = {
           holdA: false,
           held: [],
@@ -501,6 +500,15 @@ const Zip = require("adm-zip");
   }
   try {
     await launch();
+    originalA = await snapshot(instanceDir(instances[0]));
+    assert.deepEqual(
+      originalA,
+      originalUserA,
+      "startup must not migrate or add metadata to A",
+    );
+    checks.push(
+      "startup leaves A's entire file tree unchanged; storage migration is deferred until that instance is modified",
+    );
     assert.equal((await state()).selectedInstanceId, instances[0].id);
     await navigate();
     await app.evaluate(() => {
@@ -602,7 +610,9 @@ const Zip = require("adm-zip");
       "https://cdn.modrinth.com/qa/mainB/main-b.jar",
     ]);
     assert.deepEqual(
-      await fs.readFile(path.join(instanceDir(instances[1]), "mods/dependency.jar")),
+      await fs.readFile(
+        path.join(instanceDir(instances[1]), "mods/dependency.jar"),
+      ),
       Buffer.from(archives[dependency.files[0].url], "base64"),
       "the matching disabled dependency is enabled and reused without downloading",
     );
@@ -636,6 +646,12 @@ const Zip = require("adm-zip");
     assert.equal(disk.mods[0].projectId, "qaMain");
     await finishApp();
     await launch();
+    const refreshedA = await snapshot(instanceDir(instances[0]));
+    assert.deepEqual(
+      refreshedA,
+      originalA,
+      "restart must leave the unmodified A instance byte-for-byte unchanged",
+    );
     await navigate();
     await card()
       .getByRole("button", {

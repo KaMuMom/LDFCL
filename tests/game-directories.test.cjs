@@ -8,7 +8,7 @@ const { EventEmitter } = require("node:events");
 const { PassThrough } = require("node:stream");
 const compiledRoot =
   process.env.LDFCL_TEST_COMPILED_ROOT ||
-  path.join(__dirname, "..", "dist-electron");
+  path.join(__dirname, "..", "core", "dist");
 const {
   resolveDefaultGameDirectoryPath,
   canonicalGameDirectoryPath,
@@ -16,9 +16,9 @@ const {
   gameDirectoryRoots,
   scanGameDirectory,
   safeGameVersionId,
-} = require(path.join(compiledRoot, "electron", "game-directories.js"));
+} = require(path.join(compiledRoot, "core", "game-directories.js"));
 const { GameService, tokenizeArguments } = require(
-  path.join(compiledRoot, "electron", "services", "game.js"),
+  path.join(compiledRoot, "core", "services", "game.js"),
 );
 
 const base = {

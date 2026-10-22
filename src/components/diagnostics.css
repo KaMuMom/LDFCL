@@ -1,0 +1,154 @@
+.diagnostics-page {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.diagnostic-toolbar,
+.diagnostic-card-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.diagnostic-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.diagnostic-toolbar select {
+  max-width: 230px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: inherit;
+  background: var(--surface);
+}
+.diagnostic-tabs {
+  display: flex;
+  gap: 5px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.diagnostic-tabs button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 13px;
+  border-radius: 10px;
+}
+.diagnostic-tabs button[aria-selected="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.diagnostic-live-panel,
+.diagnostic-history,
+.diagnostic-report {
+  padding: 20px;
+  min-width: 0;
+}
+.diagnostic-console {
+  background: #101d30;
+  color: #d7e8ff;
+  padding: 16px;
+  border-radius: 14px;
+  font:
+    12px/1.65 Consolas,
+    monospace;
+  min-height: 200px;
+  max-height: 52vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.diagnostic-report-layout {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.diagnostic-history {
+  max-height: 68vh;
+  overflow: auto;
+}
+.diagnostic-history h3 {
+  margin-top: 0;
+}
+.diagnostic-history-item {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  padding: 12px;
+  margin: 5px 0;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.diagnostic-history-item span,
+.diagnostic-history-item small {
+  color: var(--muted);
+}
+.diagnostic-history-item.selected {
+  background: var(--accent-soft);
+  border-color: var(--border);
+}
+.diagnostic-report h2 {
+  font-size: 19px;
+  margin: 8px 0;
+}
+.diagnostic-report h3 {
+  margin: 22px 0 10px;
+}
+.diagnostic-report li {
+  margin: 8px 0;
+  line-height: 1.6;
+}
+.diagnostic-report details {
+  border: 1px solid var(--border);
+  padding: 10px;
+  margin: 8px 0;
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+.diagnostic-report details pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 320px;
+  overflow: auto;
+}
+.diagnostic-confidence {
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.diagnostic-mod {
+  padding: 13px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  margin: 10px 0;
+}
+.diagnostic-error {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--danger);
+}
+@media (max-width: 850px) {
+  .diagnostic-report-layout {
+    grid-template-columns: 1fr;
+  }
+  .diagnostic-history {
+    max-height: 190px;
+  }
+  .diagnostic-history-item {
+    padding: 9px;
+  }
+}

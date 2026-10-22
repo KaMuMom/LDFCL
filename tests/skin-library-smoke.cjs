@@ -158,12 +158,8 @@ const zlib = require("node:zlib");
         const requireApp = process
           .getBuiltinModule("module")
           .createRequire(paths.join(app.getAppPath(), "package.json"));
-        const { SkinLibrary } = requireApp(
-          "./dist-electron/electron/services/skin-library.js",
-        );
-        const { AccountService } = requireApp(
-          "./dist-electron/electron/services/accounts.js",
-        );
+        const { SkinLibrary } = requireApp("@ldfcl/core/services/skin-library");
+        const { AccountService } = requireApp("@ldfcl/core/services/accounts");
         const q = (globalThis.__ldfclSkinLibraryQA = {
           signedIn: false,
           failListOnce: false,

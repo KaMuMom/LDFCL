@@ -44,6 +44,10 @@ import ResourceDownloads, {
 import About from "./components/About";
 import Instances from "./components/Instances";
 import GeneralGameSettings from "./components/GeneralGameSettings";
+import HealthPanel from "./components/HealthPanel";
+import Diagnostics from "./components/Diagnostics";
+import AISettings from "./components/AISettings";
+import { GAME_PRESETS, gamePreset } from "../shared/game-presets";
 import { GlassSurface } from "./ui/Glass";
 import { LAUNCHER_VERSION } from "../shared/launcher";
 import { taskProgressPercent } from "../shared/task-progress";
@@ -87,6 +91,7 @@ const loaderName = (l: string) =>
     fabric: "Fabric",
     quilt: "Quilt",
     forge: "Forge",
+    neoforge: "NeoForge",
     optifine: "OptiFine",
   })[l] || l;
 const errorMessage = (e: any) =>
@@ -103,7 +108,7 @@ export default function App() {
     [tasks, setTasks] = useState<Record<string, Task>>({}),
     [toast, setToast] = useState(""),
     [busy, setBusy] = useState(""),
-    [logs, setLogs] = useState<string[]>([]),
+    [logsByInstance, setLogs] = useState<Record<string, string[]>>({}),
     [running, setRunning] = useState<string[]>([]),
     [auth, setAuth] = useState<any>(null);
   const instance =
@@ -112,6 +117,7 @@ export default function App() {
   const account =
     state.accounts.find((a) => a.id === state.selectedAccountId) ||
     state.accounts[0];
+  const logs = logsByInstance[instance?.id || "launcher"] || [];
   const notify = useCallback((text: string) => setToast(text), []);
   const call = useCallback(
     async <T = any,>(method: string, payload?: any): Promise<T> => {
@@ -164,7 +170,17 @@ export default function App() {
         if (["error", "expired"].includes(e.status)) notify(e.message);
       }
       if (e.type === "log")
-        setLogs((old) => [...old.slice(-499), e.line || e.message || ""]);
+        setLogs((old) => {
+          const id = e.instanceId || "launcher";
+          return {
+            ...old,
+            [id]: [
+              ...(old[id] || []),
+              ...String(e.line || e.message || "").split(/\r?\n/),
+            ].slice(-500),
+          };
+        });
+      if (e.type === "diagnosis") notify("已生成崩溃诊断，可在运行日志中查看");
       if (e.type === "game") {
         const id = e.instanceId;
         if (["started", "running"].includes(e.status))
@@ -178,6 +194,19 @@ export default function App() {
       }
     });
   }, []);
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      document.documentElement.dataset.theme =
+        state.settings.theme === "dark" ||
+        (state.settings.theme !== "light" && media.matches)
+          ? "dark"
+          : "light";
+    };
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [state.settings.theme]);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(""), 6500);
@@ -342,6 +371,15 @@ export default function App() {
                   <div className="eyebrow">MINECRAFT JAVA EDITION</div>
                   <h1>开始游戏</h1>
                 </div>
+                {instance && (
+                  <HealthPanel
+                    key={instance.id}
+                    instanceId={instance.id}
+                    call={call}
+                    notify={notify}
+                    compact
+                  />
+                )}
               </div>
               <div className="home-station">
                 <HomeSkinPreview
@@ -568,7 +606,9 @@ export default function App() {
                     setTasks((old) =>
                       Object.fromEntries(
                         Object.entries(old).filter(([, t]) =>
-                          ["running", "downloading"].includes(t.status),
+                          ["running", "downloading", "paused"].includes(
+                            t.status,
+                          ),
                         ),
                       ),
                     )
@@ -608,6 +648,8 @@ export default function App() {
                               error: "下载失败",
                               running: "正在下载",
                               downloading: "正在下载",
+                              paused: "已暂停",
+                              cancelled: "已取消",
                             }[t.status] ||
                             t.status}
                         </p>
@@ -620,6 +662,50 @@ export default function App() {
                         </div>
                       </div>
                       <span>{taskProgressPercent(t)}%</span>
+                      {t.controllable && (
+                        <div className="button-group">
+                          <select
+                            aria-label={`${t.title} 下载源`}
+                            value={
+                              t.source ||
+                              state.settings.downloadSource ||
+                              "official"
+                            }
+                            onChange={(event) =>
+                              void call("download:source", {
+                                id: t.id,
+                                source: event.target.value,
+                              }).catch((error) => notify(errorMessage(error)))
+                            }
+                          >
+                            <option value="official">官方源</option>
+                            <option value="bmclapi">BMCLAPI</option>
+                          </select>
+                          <button
+                            className="btn subtle"
+                            onClick={() =>
+                              void call("download:control", {
+                                id: t.id,
+                                action:
+                                  t.status === "paused" ? "resume" : "pause",
+                              }).catch((error) => notify(errorMessage(error)))
+                            }
+                          >
+                            {t.status === "paused" ? "继续" : "暂停"}
+                          </button>
+                          <button
+                            className="btn subtle"
+                            onClick={() =>
+                              void call("download:control", {
+                                id: t.id,
+                                action: "cancel",
+                              }).catch((error) => notify(errorMessage(error)))
+                            }
+                          >
+                            取消
+                          </button>
+                        </div>
+                      )}
                     </GlassSurface>
                   ))
                 )}
@@ -635,36 +721,12 @@ export default function App() {
             />
           )}
           {page === "logs" && (
-            <>
-              <PageTitle
-                eyebrow="BEHIND THE SCENES"
-                title="运行日志"
-                subtitle="游戏运行输出保留最近 500 行；账号令牌不会写入日志。"
-              />
-              <div className="section-title">
-                <h3>
-                  控制台 <span>{logs.length}</span>
-                </h3>
-                <button
-                  className="btn subtle"
-                  onClick={() => {
-                    void navigator.clipboard
-                      .writeText(logs.join("\n"))
-                      .then(() => notify("日志已复制"));
-                  }}
-                >
-                  <Copy size={15} />
-                  复制日志
-                </button>
-              </div>
-              <GlassSurface as="div" className="console">
-                {logs.length ? (
-                  logs.map((l, i) => <div key={i}>{l}</div>)
-                ) : (
-                  <span>等待 Minecraft 启动…</span>
-                )}
-              </GlassSurface>
-            </>
+            <Diagnostics
+              call={call}
+              instanceId={instance?.id}
+              instances={state.instances}
+              logs={logs}
+            />
           )}
         </main>
       </div>
@@ -830,9 +892,11 @@ function MicrosoftDeviceStatus({
   onError: (message: string) => void;
 }) {
   const [seconds, setSeconds] = useState(auth.expiresIn ?? 0);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState(auth.codeCopied === true);
   useEffect(() => {
-    setCopied(false);
+    setCopied(auth.codeCopied === true);
+  }, [auth.userCode, auth.codeCopied]);
+  useEffect(() => {
     const expiresAt = Date.now() + (auth.expiresIn ?? 0) * 1000;
     const update = () =>
       setSeconds(Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000)));
@@ -853,6 +917,16 @@ function MicrosoftDeviceStatus({
           <code className="device-code-value" aria-label="微软授权码">
             {auth.userCode}
           </code>
+          <p className="device-code-copy-status">
+            {copied
+              ? auth.codeCopied
+                ? "授权码已自动复制，可在微软页面直接粘贴。"
+                : "授权码已复制，可在微软页面直接粘贴。"
+              : auth.copyMessage ||
+                (auth.codeCopied === false
+                  ? "未能自动复制授权码，请使用“复制授权码”按钮或手动输入。"
+                  : "正在准备复制授权码…")}
+          </p>
           <div className="device-auth-actions">
             <button
               className="btn subtle"
@@ -916,7 +990,7 @@ function AccountModal({
     [name, setName] = useState(""),
     [server, setServer] = useState(""),
     [password, setPassword] = useState(""),
-    [clientId, setClientId] = useState(state.settings.microsoftClientId),
+    [clientId, setClientId] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const attempt = useRef(0);
@@ -965,9 +1039,13 @@ function AccountModal({
         close();
         notify("皮肤站账号已添加");
       } else {
-        await call("settings", { microsoftClientId: clientId });
+        if (clientId.trim()) {
+          await call("settings", { microsoftClientId: clientId.trim() });
+          if (run === attempt.current) setClientId("");
+          await refresh();
+        }
         if (run !== attempt.current) return;
-        await call("account:microsoft", { clientId });
+        await call("account:microsoft");
       }
     } catch (e) {
       if (run === attempt.current) setError(errorMessage(e));
@@ -1069,7 +1147,7 @@ function AccountModal({
             <details
               className="auth-config"
               open={
-                !state.settings.microsoftClientId &&
+                state.settings.microsoftClientIdStorageStatus !== "ready" &&
                 !busy &&
                 !["waiting", "authenticating"].includes(auth?.status)
               }
@@ -1081,14 +1159,35 @@ function AccountModal({
                 </label>
                 <input
                   id="microsoft-client-id"
+                  type="password"
+                  autoComplete="new-password"
+                  spellCheck={false}
                   value={clientId}
                   disabled={
                     busy || ["waiting", "authenticating"].includes(auth?.status)
                   }
                   onChange={(e) => setClientId(e.target.value)}
-                  placeholder="具有 Minecraft API 权限的公用客户端 ID"
+                  placeholder={
+                    state.settings.microsoftClientIdStorageStatus === "ready"
+                      ? "已加密保存，留空继续使用"
+                      : "具有 Minecraft API 权限的公用客户端 ID"
+                  }
                 />
               </div>
+              <p>
+                {state.settings.microsoftClientIdStorageStatus === "ready"
+                  ? "Client ID 已加密保存。留空继续使用，输入新值可替换。"
+                  : state.settings.microsoftClientIdStorageStatus ===
+                      "unavailable"
+                    ? "系统加密存储不可用，请恢复系统加密功能后重新配置。"
+                    : state.settings.microsoftClientIdStorageStatus ===
+                        "unreadable"
+                      ? "保存的授权配置无法解密，请重新输入 Client ID。"
+                      : state.settings.microsoftClientIdStorageStatus ===
+                          "migration-pending"
+                        ? "旧授权配置尚未完成加密迁移，请恢复系统加密功能后重新配置。"
+                        : "尚未配置 Client ID，保存时将使用系统加密存储。"}
+              </p>
               <p>
                 使用自有且获准访问 Minecraft API 的应用，并启用公用客户端流程。
                 设备代码登录无需配置本机回调地址。
@@ -1252,6 +1351,56 @@ function LauncherSettings({
         </button>
       </PageTitle>
       <div className="settings-grid">
+        <GlassSurface className="settings-panel full-span">
+          <h3>
+            <Settings size={19} />
+            外观与启动预设
+          </h3>
+          <div className="field">
+            <label htmlFor="launcher-theme">主题</label>
+            <select
+              id="launcher-theme"
+              value={s.theme || "system"}
+              onChange={(event) =>
+                setS({
+                  ...s,
+                  theme: event.target.value as "system" | "light" | "dark",
+                })
+              }
+            >
+              <option value="system">跟随系统</option>
+              <option value="light">浅色</option>
+              <option value="dark">深色</option>
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="launcher-preset">通用启动预设</label>
+            <select
+              id="launcher-preset"
+              value={s.gamePreset || "custom"}
+              onChange={(event) => {
+                const id = event.target.value as typeof s.gamePreset;
+                setS({
+                  ...s,
+                  gamePreset: id,
+                  ...(id && id !== "custom"
+                    ? { gameDefaults: gamePreset(id) }
+                    : {}),
+                });
+              }}
+            >
+              <option value="custom">自定义</option>
+              {Object.entries(GAME_PRESETS).map(([id, preset]) => (
+                <option key={id} value={id}>
+                  {preset.name} · {preset.description}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="muted">
+            预设更新通用游戏设置，实例内单独设置继续优先；保存后生效。
+          </p>
+        </GlassSurface>
         <GeneralGameSettings
           value={s.gameDefaults}
           onChange={(gameDefaults) => setS({ ...s, gameDefaults })}
@@ -1434,6 +1583,22 @@ function LauncherSettings({
             <Download size={19} />
             下载与网络
           </h3>
+          <div className="field">
+            <label htmlFor="global-download-source">全局游戏资源源</label>
+            <select
+              id="global-download-source"
+              value={s.downloadSource || "official"}
+              onChange={(event) =>
+                setS({
+                  ...s,
+                  downloadSource: event.target.value as "official" | "bmclapi",
+                })
+              }
+            >
+              <option value="official">官方源</option>
+              <option value="bmclapi">BMCLAPI 镜像</option>
+            </select>
+          </div>
           <div className="field slider-field">
             <label>
               并发下载线程<b>{s.downloadConcurrency} 线程</b>
@@ -1452,7 +1617,9 @@ function LauncherSettings({
             <ShieldCheck size={17} />
             游戏资源和内容下载均进行哈希校验，失败自动重试。
           </div>
-          <p className="muted">使用 Mojang、加载器官方源与 Modrinth 内容源。</p>
+          <p className="muted">
+            镜像仅映射支持的游戏资源地址，账号认证仍连接官方；各下载任务可单独选择源。
+          </p>
         </GlassSurface>
         <GlassSurface className="settings-panel full-span">
           <h3>
@@ -1514,6 +1681,7 @@ function LauncherSettings({
             <Settings size={19} />
             工作空间
           </h3>
+          <StoreStats call={call} />
           <div className="setting-row">
             <div>
               <strong>游戏启动后最小化</strong>
@@ -1547,7 +1715,50 @@ function LauncherSettings({
             <span className="badge">Minecraft Java Edition</span>
           </div>
         </GlassSurface>
+        <GlassSurface className="settings-panel full-span">
+          <AISettings call={call} />
+        </GlassSurface>
       </div>
     </>
+  );
+}
+
+function StoreStats({ call }: { call: LauncherAPI["call"] }) {
+  const [stats, setStats] = useState<any>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    void call("store:stats")
+      .then((value) => {
+        if (active) setStats(value);
+      })
+      .catch((error) => {
+        if (active) setError(String(error.message || error));
+      });
+    return () => {
+      active = false;
+    };
+  }, [call]);
+  return (
+    <div className="setting-row">
+      <div>
+        <strong>内容存储仓库（SHA-256）</strong>
+        <p className="break-word">
+          {stats
+            ? `${stats.objects ?? stats.objectCount ?? 0} 个独立对象 · ${((stats.bytes ?? stats.totalBytes ?? stats.storedBytes ?? 0) / 1048576).toFixed(1)} MB`
+            : error || "正在统计…"}
+        </p>
+      </div>
+      <button
+        className="btn subtle"
+        onClick={() =>
+          void call("store:stats")
+            .then(setStats)
+            .catch((error) => setError(String(error.message || error)))
+        }
+      >
+        刷新统计
+      </button>
+    </div>
   );
 }

@@ -3,7 +3,11 @@ import path from "node:path";
 class TransferQueue {
   private active = 0;
   private limit = 8;
-  private pending: Array<() => void> = [];
+  private pending: Array<{
+    start: () => void;
+    signal?: AbortSignal;
+    abort: () => void;
+  }> = [];
   get concurrency(): number {
     return this.limit;
   }
@@ -16,13 +20,26 @@ class TransferQueue {
   }
   private drain(): void {
     while (this.active < this.limit && this.pending.length) {
+      const entry = this.pending.shift()!;
+      entry.signal?.removeEventListener("abort", entry.abort);
       this.active++;
-      this.pending.shift()!();
+      entry.start();
     }
   }
-  async run<T>(operation: () => Promise<T>): Promise<T> {
-    await new Promise<void>((resolve) => {
-      this.pending.push(resolve);
+  async run<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    await new Promise<void>((resolve, reject) => {
+      if (signal?.aborted) return reject(signal.reason);
+      const entry = {
+        start: resolve,
+        signal,
+        abort: () => {
+          const index = this.pending.indexOf(entry);
+          if (index !== -1) this.pending.splice(index, 1);
+          reject(signal?.reason || new Error("下载已中断"));
+        },
+      };
+      signal?.addEventListener("abort", entry.abort, { once: true });
+      this.pending.push(entry);
       this.drain();
     });
     try {

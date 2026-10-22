@@ -5,19 +5,19 @@ const path = require("node:path");
 const os = require("node:os");
 const compiledRoot =
   process.env.LDFCL_TEST_COMPILED_ROOT ||
-  path.join(__dirname, "..", "dist-electron");
+  path.join(__dirname, "..", "core", "dist");
 const {
   instanceVersionDirectoryId,
   instanceGameDirectory,
   assertInstanceGameDirectory,
   allocateVersionDirectory,
   prepareInstanceDirectories,
-} = require(path.join(compiledRoot, "electron", "instance-paths.js"));
+} = require(path.join(compiledRoot, "core", "instance-paths.js"));
 const { scanGameDirectory } = require(
-  path.join(compiledRoot, "electron", "game-directories.js"),
+  path.join(compiledRoot, "core", "game-directories.js"),
 );
 const { GameService } = require(
-  path.join(compiledRoot, "electron", "services", "game.js"),
+  path.join(compiledRoot, "core", "services", "game.js"),
 );
 
 function directory(root, layout = "standard") {

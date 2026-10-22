@@ -12,3 +12,4 @@ LDFCL-data/
 accounts.json
 launcher.json
 credential.xml
+core/dist/

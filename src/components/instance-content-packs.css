@@ -1,0 +1,58 @@
+.instance-content-packs {
+  min-width: 0;
+}
+.pack-manager-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.pack-manager-toolbar > div {
+  flex: 1;
+  min-width: 140px;
+}
+.pack-manager-toolbar small,
+.pack-manager-choice small {
+  display: block;
+  color: var(--text-secondary, #64748b);
+  margin-top: 4px;
+  font-size: 11px;
+}
+.pack-manager-list {
+  display: grid;
+  gap: 7px;
+}
+.pack-manager-row {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  padding: 11px;
+  border: 1px solid var(--border, #d7dfeb);
+  border-radius: 12px;
+}
+.pack-manager-choice {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.pack-manager-choice span {
+  min-width: 0;
+}
+.pack-manager-choice strong {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.pack-manager-choice input {
+  accent-color: var(--accent, #3488ed);
+}
+.pack-manager-empty {
+  padding: 35px 12px;
+  display: flex;
+  gap: 9px;
+  justify-content: center;
+  align-items: center;
+  color: var(--text-secondary, #64748b);
+  font-size: 12px;
+}

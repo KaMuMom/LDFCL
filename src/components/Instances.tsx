@@ -21,6 +21,10 @@ import {
 } from "lucide-react";
 import type { Instance, LauncherAPI } from "../../shared/types";
 import GameOptionsFields from "./GameOptionsFields";
+import HealthPanel from "./HealthPanel";
+import InstanceStorage from "./InstanceStorage";
+import InstanceContentPacks from "./InstanceContentPacks";
+import { GAME_PRESETS } from "../../shared/game-presets";
 import { GlassSurface } from "../ui/Glass";
 import "./instances.css";
 
@@ -44,6 +48,7 @@ const loaderName = (loader: string) =>
     fabric: "Fabric",
     quilt: "Quilt",
     forge: "Forge",
+    neoforge: "NeoForge",
     optifine: "OptiFine",
   })[loader] || loader;
 const errorMessage = (error: any) =>
@@ -52,7 +57,9 @@ const errorMessage = (error: any) =>
     "",
   );
 const validTab = (tab: string) =>
-  ["mods", "overview", "game", "advanced"].includes(tab) ? tab : "mods";
+  ["mods", "overview", "game", "advanced", "health", "packs"].includes(tab)
+    ? tab
+    : "mods";
 
 function Empty({
   icon: Icon,
@@ -147,6 +154,20 @@ export default function Instances({
           <p>存档、模组与游戏预设，随每个版本独立保存。</p>
         </div>
         <div className="button-group">
+          <button
+            className="btn subtle"
+            disabled={importing}
+            onClick={() => {
+              setImporting(true);
+              void call("instance:rebuild")
+                .then(refresh)
+                .catch((error) => notify(errorMessage(error)))
+                .finally(() => setImporting(false));
+            }}
+          >
+            <Import size={16} />
+            从清单重建
+          </button>
           <button
             className="btn subtle"
             disabled={importing}
@@ -425,6 +446,8 @@ function InstanceManager({
           ["overview", "实例概览"],
           ["game", "游戏预设"],
           ["advanced", "实例设置"],
+          ["health", "健康与快照"],
+          ["packs", "资源与光影"],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -490,6 +513,34 @@ function InstanceManager({
             <ShieldCheck size={18} />
             该实例的存档、Mod、资源包、光影及 options.txt 与其他版本完全隔离。
           </div>
+        </div>
+      )}
+      {tab === "health" && (
+        <div className="detail-body">
+          <HealthPanel instanceId={instance.id} call={call} notify={notify} />
+          <InstanceStorage
+            instanceId={instance.id}
+            call={call}
+            refresh={refresh}
+            notify={notify}
+          />
+        </div>
+      )}
+      {tab === "packs" && (
+        <div className="detail-body">
+          <InstanceContentPacks
+            instance={instance}
+            kind="resourcepack"
+            call={call}
+            notify={notify}
+          />
+          <hr />
+          <InstanceContentPacks
+            instance={instance}
+            kind="shader"
+            call={call}
+            notify={notify}
+          />
         </div>
       )}
       {tab === "mods" && (
@@ -692,6 +743,24 @@ function InstanceManager({
       )}
       {tab === "game" && (
         <div className="detail-body instance-game-options">
+          <div className="field">
+            <label htmlFor="instance-launch-preset">快速启动预设</label>
+            <select
+              id="instance-launch-preset"
+              defaultValue=""
+              onChange={(event) => {
+                const preset = GAME_PRESETS[event.target.value];
+                if (preset) setGameOptions({ ...preset.options });
+              }}
+            >
+              <option value="">选择预设并预览，保存后生效</option>
+              {Object.entries(GAME_PRESETS).map(([id, preset]) => (
+                <option value={id} key={id}>
+                  {preset.name} · {preset.description}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="notice">
             <SlidersHorizontal size={18} />
             提前设置下一次游戏的画面、音量和界面。正在运行的游戏应先退出。

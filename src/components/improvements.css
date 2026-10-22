@@ -1,0 +1,81 @@
+.improvement-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.improvement-heading strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.health-panel {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 16px;
+  margin: 12px 0;
+  min-width: 0;
+}
+.health-panel.compact {
+  padding: 8px 12px;
+  margin: 8px 0;
+}
+.health-panel.compact .btn {
+  min-height: 28px;
+  padding: 5px 8px;
+}
+.health-issues {
+  display: grid;
+  gap: 8px;
+}
+.health-issue {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+.health-issue p {
+  margin: 5px 0;
+}
+.health-issue.error {
+  border-left-color: var(--danger);
+}
+.health-issue.warning {
+  border-left-color: #c98a22;
+}
+.storage-panel {
+  display: grid;
+  gap: 14px;
+}
+.storage-panel pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow: auto;
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 12px;
+}
+.snapshot-list {
+  display: grid;
+  gap: 8px;
+}
+.snapshot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  flex-wrap: wrap;
+}
+.snapshot-row p {
+  margin: 4px 0;
+}
+.instance-tabs {
+  flex-wrap: wrap;
+}

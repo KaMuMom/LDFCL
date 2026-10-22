@@ -5,9 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const zlib = require("node:zlib");
-const {
-  SkinLibrary,
-} = require("../dist-electron/electron/services/skin-library.js");
+const { SkinLibrary } = require("@ldfcl/core/services/skin-library");
 
 function png(width = 64, height = 64, color = 90, extraInflatedBytes = 0) {
   const crc = (buffer) => {

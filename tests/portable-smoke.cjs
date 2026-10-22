@@ -12,11 +12,12 @@ const assert = require("node:assert/strict");
   const env = { ...process.env, LDFCL_DATA_DIR: dataDir };
   delete env.ELECTRON_RUN_AS_NODE;
   const child = spawn(
-    path.join(
-      root,
-      "release",
-      `LDFCL-${require("../package.json").version}-Windows-x64.exe`,
-    ),
+    process.env.LDFCL_TEST_PORTABLE_EXE ||
+      path.join(
+        root,
+        "release",
+        `LDFCL-${require("../package.json").version}-Windows-x64.exe`,
+      ),
     ["--remote-debugging-port=19349"],
     { env, windowsHide: true, stdio: "ignore" },
   );
@@ -47,14 +48,20 @@ const assert = require("node:assert/strict");
       "Portable CDP endpoint not available",
     );
     browser = await chromium.connectOverCDP(endpoint.webSocketDebuggerUrl);
-    const page = browser.contexts()[0].pages()[0];
+    const context = browser.contexts()[0];
+    const page =
+      context.pages()[0] ||
+      (await context.waitForEvent("page", { timeout: 60000 }));
     await page
       .getByRole("heading", { name: "开始游戏", exact: true })
       .waitFor();
     await page.getByLabel("首页角色皮肤预览", { exact: true }).waitFor();
     await page.getByRole("button", { name: "切换版本", exact: true }).waitFor();
     await page.getByRole("button", { name: "安装游戏", exact: true }).waitFor();
-    assert.equal(await page.getByLabel("首页账号", { exact: true }).isDisabled(), true);
+    assert.equal(
+      await page.getByLabel("首页账号", { exact: true }).isDisabled(),
+      true,
+    );
     await page.evaluate(() => document.fonts.ready);
     await page.screenshot({
       path: path.join(root, "release", "LDFCL-preview.png"),
@@ -64,7 +71,10 @@ const assert = require("node:assert/strict");
     assert.equal(state.accounts.length, 0);
     assert.equal(state.system.dataDir, dataDir);
     assert.equal(state.system.gameRoot, path.join(dataDir, ".minecraft"));
-    assert.equal(state.system.defaultGameRoot, path.join(dataDir, ".minecraft"));
+    assert.equal(
+      state.system.defaultGameRoot,
+      path.join(dataDir, ".minecraft"),
+    );
     await page.evaluate(() =>
       window.launcher.call("account:offline", { name: "Portable_QA" }),
     );

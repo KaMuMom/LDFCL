@@ -4,7 +4,6 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const Module = require("node:module");
 const http = require("node:http");
 
 const storageKey = crypto.randomBytes(32);
@@ -33,34 +32,20 @@ const safeStorage = {
     ]).toString("utf8");
   },
 };
-const originalLoad = Module._load;
-let AccountService,
+const {
+  AccountService,
   offlineUuid,
   validateSkinPng,
   normalizeTextureUrl,
-  MICROSOFT_REDIRECT_URI;
-try {
-  Module._load = function (name, ...args) {
-    return name === "electron"
-      ? { safeStorage }
-      : originalLoad.call(this, name, ...args);
-  };
-  ({
-    AccountService,
-    offlineUuid,
-    validateSkinPng,
-    normalizeTextureUrl,
-    MICROSOFT_REDIRECT_URI,
-  } = require("../dist-electron/electron/services/accounts.js"));
-} finally {
-  Module._load = originalLoad;
-}
+  MICROSOFT_REDIRECT_URI,
+} = require("@ldfcl/core/services/accounts");
 
 async function fixture(t, options = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ldfcl-accounts-"));
   const events = [];
   const service = new AccountService(dir, (event) => events.push(event), {
     microsoftPort: 0,
+    secretStorage: safeStorage,
     ...options,
   });
   t.after(async () => {
@@ -148,7 +133,9 @@ test("Yggdrasil tokens are encrypted on disk and excluded from public accounts/e
   assert(!disk.includes("test-access-secret"));
   assert(!disk.includes("test-password-secret"));
   assert(JSON.parse(disk)[0].encryptedSecrets);
-  const reloaded = new AccountService(dir, () => {});
+  const reloaded = new AccountService(dir, () => {}, {
+    secretStorage: safeStorage,
+  });
   assert.equal((await reloaded.list())[0].name, "SkinUser");
   await reloaded.remove(account.id);
   assert.equal((await reloaded.list()).length, 0);
@@ -519,7 +506,9 @@ test("Microsoft browser-created accounts retain refresh-token launch support", a
   const stored = JSON.parse(await fs.readFile(file, "utf8"));
   stored[0].expiresAt = 0;
   await fs.writeFile(file, JSON.stringify(stored));
-  const reloaded = new AccountService(dir, () => {});
+  const reloaded = new AccountService(dir, () => {}, {
+    secretStorage: safeStorage,
+  });
   const account = await reloaded.getForLaunch(success.account.id);
   assert.equal(account.accessToken, "test-minecraft-secret");
   assert.equal((await reloaded.list()).length, 1);
@@ -638,7 +627,9 @@ test("Microsoft device flow uses only own public app ID, honors polling interval
   const stored = JSON.parse(disk);
   stored[0].expiresAt = 0;
   await fs.writeFile(file, JSON.stringify(stored));
-  const reloaded = new AccountService(dir, () => {});
+  const reloaded = new AccountService(dir, () => {}, {
+    secretStorage: safeStorage,
+  });
   const launched = await reloaded.getForLaunch(success.account.id);
   assert.equal(launched.accessToken, "test-minecraft-secret");
   const refresh = calls
@@ -1152,7 +1143,9 @@ async function assertAccountRemoved(service, dir, events, id, eventIndex) {
       .slice(eventIndex)
       .some((event) => event.type === "account" && event.account.id === id),
   );
-  const reloaded = new AccountService(dir, () => {});
+  const reloaded = new AccountService(dir, () => {}, {
+    secretStorage: safeStorage,
+  });
   assert(!(await reloaded.list()).some((account) => account.id === id));
 }
 
@@ -1231,7 +1224,9 @@ test("removal while a Microsoft refresh is pending rejects late credentials and 
   const stored = JSON.parse(await fs.readFile(file, "utf8"));
   stored[0].expiresAt = 0;
   await fs.writeFile(file, JSON.stringify(stored));
-  const reloaded = new AccountService(dir, (event) => events.push(event));
+  const reloaded = new AccountService(dir, (event) => events.push(event), {
+    secretStorage: safeStorage,
+  });
   t.after(() => {
     release.resolve();
     reloaded.cancelMicrosoft();

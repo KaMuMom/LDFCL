@@ -9,9 +9,9 @@ const { PassThrough } = require("node:stream");
 const AdmZip = require("adm-zip");
 const compiledRoot =
   process.env.LDFCL_TEST_COMPILED_ROOT ||
-  path.join(__dirname, "..", "dist-electron");
+  path.join(__dirname, "..", "core", "dist");
 const { JavaManager, javaMajor } = require(
-  path.join(compiledRoot, "electron/services/java.js"),
+  path.join(compiledRoot, "core/services/java.js"),
 );
 const {
   parseJavaInstallation,
@@ -19,17 +19,17 @@ const {
   compatibleJavaArchitecture,
   javaExecutables,
   realJavaExecutable,
-} = require(path.join(compiledRoot, "electron/services/java-runtime.js"));
+} = require(path.join(compiledRoot, "core/services/java-runtime.js"));
 const {
   prepareJvmArguments,
   nativeClassifier,
   nativeExtractionAllowed,
-} = require(path.join(compiledRoot, "electron/services/launch-preparation.js"));
+} = require(path.join(compiledRoot, "core/services/launch-preparation.js"));
 const { GameService, expandArguments } = require(
-  path.join(compiledRoot, "electron/services/game.js"),
+  path.join(compiledRoot, "core/services/game.js"),
 );
 const downloadsModule = require(
-  path.join(compiledRoot, "electron/services/downloads.js"),
+  path.join(compiledRoot, "core/services/downloads.js"),
 );
 
 async function temporary(t) {

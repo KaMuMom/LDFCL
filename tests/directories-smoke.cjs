@@ -209,11 +209,23 @@ const AdmZip = require("adm-zip");
     assert.fail(`${label}: ${JSON.stringify(last)}`);
   }
   async function selected(page, root) {
-    return waitForState(
+    const result = await waitForState(
       page,
       (value) => value.system.gameRoot === root,
       `Selected game directory did not become ${root}`,
     );
+    if (
+      await page
+        .getByRole("button", { name: "重新扫描版本", exact: true })
+        .count()
+    )
+      await page.waitForFunction(() =>
+        [...document.querySelectorAll("button")].some(
+          (button) =>
+            button.textContent?.includes("重新扫描版本") && !button.disabled,
+        ),
+      );
+    return result;
   }
   async function settings(page) {
     await page
@@ -615,6 +627,14 @@ const AdmZip = require("adm-zip");
       page,
       (value) => value.instances.some((i) => i.version === "1.19.4"),
       "Rescan did not discover 1.19.4",
+    );
+    // Discovery updates state before the P1 migration finishes. Wait for the
+    // actual UI operation to release its directory lock before scanning again.
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll("button")].some(
+        (button) =>
+          button.textContent?.includes("重新扫描版本") && !button.disabled,
+      ),
     );
     const rescanned = await call(page, "game-directory:scan");
     const scanDetails = (value) => ({

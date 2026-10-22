@@ -122,12 +122,14 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ## Downloaded components and online services
 
 - Mojang/Microsoft: version manifests, game files, libraries, assets, Microsoft/Xbox/Minecraft account and profile APIs; subject to their respective service terms and Minecraft EULA.
-- Fabric, Quilt and Minecraft Forge: loader metadata, libraries and installers; those projects retain their own licenses.
+- Fabric, Quilt, Minecraft Forge and [NeoForge](https://neoforged.net/): loader metadata, libraries and official installers fetched on demand; those projects retain their own licenses. NeoForge artifacts and checksum files are retrieved from https://maven.neoforged.net/releases/ and are not bundled in this source or EXE.
 - [OptiFine](https://optifine.net/), by sp614x: its official installer is downloaded and executed locally on demand. OptiFine retains its own copyright and license; the installer, generated game patches and upstream code are not bundled with LDFCL.
 - [BMCLAPI](https://bmclapi2.bangbang93.com/), maintained by bangbang93 and contributors: OptiFine release metadata and installer mirror endpoints (`/optifine/{minecraftVersion}` and `/optifine/{minecraftVersion}/{type}/{patch}`). LDFCL uses the online service and does not bundle or copy BMCLAPI server code.
 - [Eclipse Adoptium / Temurin](https://adoptium.net/): Java runtimes fetched on demand; preserve the runtime's bundled legal notices. The OpenJDK runtime is distributed under its applicable GPLv2 with Classpath Exception and included third-party terms.
 - [Azul Zulu](https://www.azul.com/downloads/): fallback OpenJDK runtime distribution fetched on demand; preserve its included OpenJDK and third-party legal notices.
 - [authlib-injector](https://github.com/yushijinhun/authlib-injector): downloaded on demand for third-party Yggdrasil authentication; licensed under GPL-3.0. It runs as a separate Java agent and is not embedded into this TypeScript project's source license.
 - [Modrinth](https://modrinth.com/): content API and download links; individual mods, modpacks, resource packs and shaders retain their authors' licenses. Installing them does not relicense them under LDFCL's MIT license.
+- Iris, Oculus and OptiFine: LDFCL reads and writes their user configuration formats to select a shader pack. Their implementation and shader packs are not bundled or relicensed.
+- Optional OpenAI-compatible AI endpoints are configured by the user. No third-party models, credentials or credits are included. The mock provider and rule diagnostics operate locally.
 
 This application does not bundle paid Minecraft content or grant Microsoft account, skin, cape, or game ownership rights.

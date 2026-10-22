@@ -5,8 +5,8 @@ const os = require("node:os");
 const fs = require("node:fs/promises");
 const {
   resolveLauncherDataDirectory,
-} = require("../dist-electron/electron/application-paths.js");
-const { Store } = require("../dist-electron/electron/store.js");
+} = require("@ldfcl/core/application-paths");
+const { Store } = require("@ldfcl/core/store");
 
 test("launcher configuration follows the outer portable EXE instead of the extracted executable or cwd", () => {
   const outer = path.join(os.tmpdir(), "中文 空格", "便携启动器");

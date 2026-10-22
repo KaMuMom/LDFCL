@@ -1,0 +1,11 @@
+<log4j:Event logger="net.minecraft.client.main.Main" timestamp="1792650000000" level="INFO" thread="main">
+  <log4j:Message><![CDATA[Launching Minecraft with NeoForge; collected List<ModFile> entries.]]></log4j:Message>
+</log4j:Event>
+<log4j:Event logger="org.spongepowered.asm.mixin" timestamp="1792650000001" level="ERROR" thread="main">
+  <log4j:Message><![CDATA[Mixin apply for mod example failed: example.mixins.json:MainMixin]]></log4j:Message>
+  <log4j:Throwable><![CDATA[org.spongepowered.asm.mixin.throwables.MixinApplyError: Critical mixin failure
+Caused by: org.spongepowered.asm.mixin.injection.throwables.InvalidInjectionException: Required injection target was not found]]></log4j:Throwable>
+</log4j:Event>
+<log4j:Event logger="net.minecraft.client.main.Main" timestamp="1792650000002" level="INFO" thread="main">
+  <log4j:Message><![CDATA[[CHATTER] Diagnostic category is not a chat message.]]></log4j:Message>
+</log4j:Event>

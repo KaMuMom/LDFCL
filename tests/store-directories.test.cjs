@@ -3,10 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
-const {
-  Store,
-  validateSettings,
-} = require("../dist-electron/electron/store.js");
+const { Store, validateSettings } = require("@ldfcl/core/store");
 
 async function fixture(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "ldfcl-directories-"));

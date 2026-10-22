@@ -130,7 +130,10 @@ const zlib = require("node:zlib");
       "Copied portable EXE did not expose its CDP endpoint",
     );
     run.browser = await chromium.connectOverCDP(endpoint.webSocketDebuggerUrl);
-    run.page = run.browser.contexts()[0].pages()[0];
+    const context = run.browser.contexts()[0];
+    run.page =
+      context.pages()[0] ||
+      (await context.waitForEvent("page", { timeout: 60000 }));
     assert(run.page, "Portable application window is missing");
     run.page.on("pageerror", (error) => pageErrors.push(error.message));
     await run.page

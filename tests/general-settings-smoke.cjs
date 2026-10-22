@@ -141,9 +141,7 @@ const assert = require("node:assert/strict");
       const requireApp = process
         .getBuiltinModule("module")
         .createRequire(path.join(app.getAppPath(), "package.json"));
-      const { GameService } = requireApp(
-        "./dist-electron/electron/services/game.js",
-      );
+      const { GameService } = requireApp("@ldfcl/core/services/game");
       GameService.prototype.launch = async function (
         instance,
         account,
@@ -206,6 +204,11 @@ const assert = require("node:assert/strict");
         !Object.keys(s.instances.find((i) => i.id === instance.id).gameSettings)
           .length,
     );
+    // Core persistence precedes the renderer refresh and the action's final UI.
+    await page
+      .getByRole("status")
+      .filter({ hasText: "已清除实例单独预设" })
+      .waitFor();
     assert.equal(
       await page.getByLabel("渲染距离", { exact: false }).inputValue(),
       "18",

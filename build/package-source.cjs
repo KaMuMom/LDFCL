@@ -21,6 +21,9 @@ const files = [
 for (const file of files) zip.addLocalFile(path.join(root, file));
 for (const directory of [
   "electron",
+  "cli",
+  "bin",
+  "scripts",
   "shared",
   "src",
   "public",
@@ -29,17 +32,24 @@ for (const directory of [
   "docs",
 ])
   zip.addLocalFolder(path.join(root, directory), directory);
-fs.mkdirSync(path.join(root, "release"), { recursive: true });
-const output = path.join(
-  root,
-  "release",
-  `LDFCL-${require("../package.json").version}-source.zip`,
+zip.addLocalFolder(
+  path.join(root, "core"),
+  "core",
+  (entry) => !/^core[\\/](?:dist|node_modules)(?:[\\/]|$)/.test(entry),
 );
+const output = process.argv[2]
+  ? path.resolve(process.argv[2])
+  : path.join(
+      root,
+      "release",
+      `LDFCL-${require("../package.json").version}-source.zip`,
+    );
+fs.mkdirSync(path.dirname(output), { recursive: true });
 zip.writeZip(output);
 const entries = new AdmZip(output).getEntries();
 if (
   entries.some((e) =>
-    /(?:^|\/)(?:accounts\.json|launcher\.json|LDFCL-data|node_modules|\.git|\.env)(?:\/|$)/.test(
+    /(?:^|\/)(?:accounts\.json|launcher\.json|LDFCL-data|node_modules|dist|dist-electron|\.git|\.env)(?:\/|$)/.test(
       e.entryName,
     ),
   )

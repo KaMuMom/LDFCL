@@ -7,7 +7,12 @@ import AdmZip from "adm-zip";
 import type { Instance, Account, Settings } from "../../shared/types";
 import { LAUNCHER_VERSION } from "../../shared/launcher";
 import { effectiveGameOptions } from "../../shared/game-settings";
+import { validateExtraJvmArguments } from "../../shared/jvm-arguments";
+import { CrashDiagnostics } from "./crash-diagnostics";
+import { readModMetadata } from "./mod-metadata";
+import type { DiagnosisMod } from "../../shared/diagnostics";
 import { installOptifine, optifineVersions } from "./optifine";
+import { neoforgeArtifact, neoforgeVersions } from "./neoforge";
 import { safeGameVersionId } from "../game-directories";
 import {
   allocateVersionDirectory,
@@ -181,10 +186,15 @@ export class GameService {
   private running = new Map<string, ChildProcess>();
   private installing = new Set<string>();
   private starting = new Set<string>();
+  private diagnostics: CrashDiagnostics;
+  private sessions = new Map<
+    string,
+    Awaited<ReturnType<CrashDiagnostics["begin"]>>
+  >();
   constructor(
     private dataDir: string,
     private emit: Emit = () => {},
-    options: { minecraftRoot?: string } = {},
+    options: { minecraftRoot?: string; diagnostics?: CrashDiagnostics } = {},
   ) {
     if (options.minecraftRoot && !path.isAbsolute(options.minecraftRoot))
       throw new Error("游戏资源目录必须使用完整的绝对路径。");
@@ -193,6 +203,11 @@ export class GameService {
       : path.join(dataDir, "minecraft");
     this.downloads = new DownloadManager(dataDir, emit);
     this.java = new JavaManager(dataDir, emit, this.downloads);
+    this.diagnostics =
+      options.diagnostics ||
+      new CrashDiagnostics(dataDir, {
+        onDiagnosis: (diagnosis) => this.emit({ type: "diagnosis", diagnosis }),
+      });
   }
 
   async versions(): Promise<any[]> {
@@ -206,6 +221,9 @@ export class GameService {
 
   async optifineVersions(version: string) {
     return optifineVersions(version);
+  }
+  async neoforgeVersions(version: string) {
+    return neoforgeVersions(version);
   }
 
   setConcurrency(value: number): void {
@@ -279,6 +297,92 @@ export class GameService {
       );
       await this.saveVersion(metadata);
       return { id: metadata.id, loaderVersion };
+    }
+    if (loader === "neoforge") {
+      const versions = await neoforgeVersions(version);
+      const loaderVersion =
+        requested ||
+        versions.find((item) => !item.includes("beta")) ||
+        versions[0];
+      if (!loaderVersion || !versions.includes(loaderVersion))
+        throw new Error(`NeoForge 暂无 Minecraft ${version} 对应的指定版本`);
+      const artifact = neoforgeArtifact(version);
+      const url = `https://maven.neoforged.net/releases/net/neoforged/${artifact}/${loaderVersion}/${artifact}-${loaderVersion}-installer.jar`;
+      const checksumResponse = await fetch(`${url}.sha1`, {
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!checksumResponse.ok)
+        throw new Error("无法获取官方 NeoForge 安装器校验值");
+      const checksum = (await checksumResponse.text()).trim().split(/\s/)[0];
+      if (!/^[a-f0-9]{40}$/i.test(checksum))
+        throw new Error("NeoForge 安装器校验值无效");
+      const installer = path.join(
+        this.dataDir,
+        "cache",
+        `neoforge-${loaderVersion}-installer.jar`,
+      );
+      await this.downloads.download(
+        url,
+        installer,
+        checksum,
+        undefined,
+        "下载 NeoForge 安装器",
+      );
+      const javaPath = await this.java.ensure(versionJava(version));
+      await fs.mkdir(this.root, { recursive: true });
+      const profiles = path.join(this.root, "launcher_profiles.json");
+      await fs
+        .writeFile(profiles, '{"profiles":{}}', { flag: "wx" })
+        .catch((error: any) => {
+          if (error.code !== "EEXIST") throw error;
+        });
+      const taskId = randomUUID();
+      const report = (status: string, detail?: string) =>
+        this.emit({
+          type: "task",
+          task: {
+            id: taskId,
+            title: "安装 NeoForge",
+            progress: status === "completed" ? 1 : 0.1,
+            status,
+            detail,
+          },
+        });
+      report("running", "运行官方安装器并生成客户端配置");
+      try {
+        await runProcess(
+          javaPath,
+          ["-jar", installer, "--installClient", this.root],
+          this.root,
+          (line) => this.emit({ type: "log", instanceId: "installer", line }),
+        );
+        const directories = await fs.readdir(path.join(this.root, "versions"));
+        for (const directory of directories) {
+          safeId(directory);
+          if (directory === version) continue;
+          const filename = path.join(
+            this.root,
+            "versions",
+            directory,
+            `${directory}.json`,
+          );
+          await assertPlainTree(filename);
+          const metadata = JSON.parse(await fs.readFile(filename, "utf8"));
+          if (
+            metadata.id === directory &&
+            metadata.inheritsFrom === version &&
+            (directory.includes(loaderVersion) ||
+              JSON.stringify(metadata.libraries).includes(`:${loaderVersion}`))
+          ) {
+            report("completed");
+            return { id: directory, loaderVersion };
+          }
+        }
+        throw new Error("NeoForge 官方安装器未生成匹配的客户端配置");
+      } catch (error) {
+        report("failed", String(error));
+        throw error;
+      }
     }
     if (loader === "forge") {
       const promotions = await requestJson<any>(
@@ -710,7 +814,11 @@ export class GameService {
       let launchVersion = input.version,
         loaderVersion: string | undefined;
       if (input.loader && input.loader !== "vanilla") {
-        if (input.loader === "forge" || input.loader === "optifine") {
+        if (
+          input.loader === "forge" ||
+          input.loader === "neoforge" ||
+          input.loader === "optifine"
+        ) {
           if (!vanilla.downloads?.client?.url)
             throw new Error("原版元数据缺少客户端 JAR");
           await this.downloads.download(
@@ -938,6 +1046,7 @@ export class GameService {
       `-Xms${Math.min(512, memoryMb)}M`,
       `-Xmx${memoryMb}M`,
       "-Dfile.encoding=UTF-8",
+      ...validateExtraJvmArguments(instance.jvmArgs ?? settings.jvmArgs ?? []),
       ...jvm,
     ];
     if (metadata.logging?.client?.argument)
@@ -997,13 +1106,42 @@ export class GameService {
       account.refreshToken,
       account.clientToken,
     ].filter((secret): secret is string => !!secret);
-    const redact = (line: string) =>
-      secrets
-        .reduce(
-          (result, secret) => result.split(secret).join("[REDACTED]"),
+    const mods: DiagnosisMod[] = [];
+    const modDirectory = path.join(gameDirectory, "mods");
+    for (const entry of (
+      await fs.readdir(modDirectory, { withFileTypes: true }).catch(() => [])
+    ).slice(0, 10000)) {
+      if (!entry.isFile() || !/\.jar$/i.test(entry.name)) continue;
+      try {
+        const file = path.join(modDirectory, entry.name);
+        if ((await fs.stat(file)).size > 512 * 1024 * 1024) continue;
+        const zip = new AdmZip(file);
+        const metadata = readModMetadata((name) => {
+          const item = zip.getEntry(name);
+          return item && item.header.size < 4 * 1024 * 1024
+            ? item.getData().toString("utf8")
+            : null;
+        }, entry.name);
+        mods.push({ ...metadata, filename: entry.name });
+      } catch {
+        /* An unreadable mod must not prevent log capture or game launch. */
+      }
+    }
+    const session = await this.diagnostics.begin({
+      instanceId: instance.id,
+      gameDirectory,
+      secrets,
+      mods,
+      onLine: (line, stream, runId) =>
+        this.emit({
+          type: "log",
+          instanceId: instance.id,
           line,
-        )
-        .replace(/(Bearer\s+)[\w.\-]+/gi, "$1[REDACTED]");
+          stream,
+          runId,
+        }),
+    });
+    this.sessions.set(instance.id, session);
     const child = spawn(javaPath, args, {
       cwd: gameDirectory,
       windowsHide: true,
@@ -1011,22 +1149,12 @@ export class GameService {
       env: { ...process.env },
     });
     this.running.set(instance.id, child);
-    child.stdout?.on("data", (chunk) =>
-      this.emit({
-        type: "log",
-        instanceId: instance.id,
-        line: redact(String(chunk)),
-      }),
-    );
-    child.stderr?.on("data", (chunk) =>
-      this.emit({
-        type: "log",
-        instanceId: instance.id,
-        line: redact(String(chunk)),
-      }),
-    );
-    child.on("close", (code) => {
+    child.stdout?.on("data", (chunk) => session.capture("stdout", chunk));
+    child.stderr?.on("data", (chunk) => session.capture("stderr", chunk));
+    child.on("close", (code, signal) => {
       this.running.delete(instance.id);
+      this.sessions.delete(instance.id);
+      void session.finish({ exitCode: code, signal }).catch(() => {});
       this.emit({
         type: "game",
         status: "exited",
@@ -1038,6 +1166,10 @@ export class GameService {
     return new Promise((resolve, reject) => {
       child.once("error", (error) => {
         this.running.delete(instance.id);
+        this.sessions.delete(instance.id);
+        void session
+          .finish({ exitCode: null, spawnError: error.message })
+          .catch(() => {});
         this.emit({
           type: "game",
           status: "error",
@@ -1087,6 +1219,7 @@ export class GameService {
   async stop(id: string): Promise<void> {
     const child = this.running.get(id);
     if (!child) return;
+    this.sessions.get(id)?.markStopped();
     if (process.platform === "win32" && child.pid) {
       try {
         await runProcess(
