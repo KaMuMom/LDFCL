@@ -28,6 +28,7 @@ export const defaults: Settings = {
   gameDefaults: {},
   downloadSource: "official",
   theme: "system",
+  interfacePerformance: "efficient",
   gamePreset: "custom",
   jvmArgs: [],
 };
@@ -527,6 +528,12 @@ export class Store {
     if (!["system", "light", "dark"].includes(this.settings.theme || ""))
       this.settings.theme = "system";
     if (
+      !["efficient", "quality"].includes(
+        this.settings.interfacePerformance || "",
+      )
+    )
+      this.settings.interfacePerformance = "efficient";
+    if (
       this.settings.gamePreset !== "custom" &&
       !Object.hasOwn(GAME_PRESETS, this.settings.gamePreset || "")
     )
@@ -647,6 +654,11 @@ export function validateSettings(p: Partial<Settings>): Partial<Settings> {
     throw Error("无效的下载源");
   if (v.theme !== undefined && !["system", "light", "dark"].includes(v.theme))
     throw Error("无效的主题");
+  if (
+    v.interfacePerformance !== undefined &&
+    !["efficient", "quality"].includes(v.interfacePerformance)
+  )
+    throw Error("无效的界面性能模式");
   if (
     v.gamePreset !== undefined &&
     v.gamePreset !== "custom" &&

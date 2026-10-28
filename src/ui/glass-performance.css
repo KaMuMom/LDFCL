@@ -1,0 +1,6 @@
+/* Overflow and the existing rounded corners already clip the tinted material.
+   Efficient mode avoids another full-panel GPU mask while retaining the same
+   gradients, theme colors, highlights, borders and layout as quality mode. */
+html[data-performance="efficient"] .glass-backdrop {
+  clip-path: none;
+}

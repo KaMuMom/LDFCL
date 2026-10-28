@@ -101,6 +101,7 @@ const { chromium } = require("playwright-core");
         selectedAccountId: "visual-fixture",
         settings: {
           theme: "light",
+          interfacePerformance: "efficient",
           downloadConcurrency: 8,
           memoryMode: "auto",
           memoryMb: 4096,
@@ -127,10 +128,16 @@ const { chromium } = require("playwright-core");
           state.settings.theme = value;
           for (const listener of listeners) listener({ type: "state" });
         },
+        performance(value) {
+          state.settings.interfacePerformance = value;
+          for (const listener of listeners) listener({ type: "state" });
+        },
       });
       window.launcher = {
         async call(method) {
           if (method === "state") return structuredClone(state);
+          if (method === "update:state")
+            return { status: "current", currentVersion: "fixture-only" };
           if (method === "skin:profile") {
             qa.profileCalls++;
             if (qa.failProfile)
@@ -312,6 +319,9 @@ const { chromium } = require("playwright-core");
       .getByLabel("可拖拽旋转的 Minecraft 角色三维预览", { exact: true })
       .waitFor();
     await page
+      .getByRole("button", { name: "开启自动旋转", exact: true })
+      .click();
+    await page
       .getByRole("button", { name: "暂停自动旋转", exact: true })
       .click();
     const wardrobeFile = path.join(output, "default-character-wardrobe.png");
@@ -320,6 +330,17 @@ const { chromium } = require("playwright-core");
     await dock.getByRole("button", { name: "资源下载", exact: true }).click();
     await page.getByRole("tab", { name: "资源包", exact: true }).click();
     await page.getByText("Aurora QA resource pack", { exact: true }).waitFor();
+    assert.equal(await page.locator(".liquid-renderer").count(), 0);
+    assert.equal(await page.locator("feDisplacementMap").count(), 0);
+    checks.push(
+      "default efficient material has no heavy SVG refraction renderers",
+    );
+    await page.evaluate(() => window.__visualQa.performance("quality"));
+    await page.waitForFunction(
+      () =>
+        document.documentElement.dataset.performance === "quality" &&
+        document.querySelectorAll(".liquid-renderer").length > 0,
+    );
 
     for (const [width, height] of [
       [1120, 760],
@@ -338,7 +359,17 @@ const { chromium } = require("playwright-core");
           .locator(".glass-backdrop")
           .evaluateAll((elements) =>
             elements
-              .filter((element) => element.getBoundingClientRect().width > 0)
+              .filter((element) => {
+                const box = element.getBoundingClientRect();
+                return (
+                  box.width > 0 &&
+                  box.height > 0 &&
+                  box.right > 0 &&
+                  box.bottom > 0 &&
+                  box.left < innerWidth &&
+                  box.top < innerHeight
+                );
+              })
               .map((element) => {
                 const css = getComputedStyle(element);
                 return {
@@ -418,6 +449,15 @@ const { chromium } = require("playwright-core");
         );
       }
     }
+    await page.evaluate(() => window.__visualQa.performance("efficient"));
+    await page.waitForFunction(
+      () =>
+        document.documentElement.dataset.performance === "efficient" &&
+        document.querySelectorAll(".liquid-renderer").length === 0,
+    );
+    checks.push(
+      "switching back to efficient material unmounts all heavy filters",
+    );
     assert.deepEqual(
       await page.evaluate(() => window.__visualQa.unexpectedCalls),
       [],

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Check,
@@ -417,15 +417,26 @@ function Stage({
     </div>
   );
 }
-export default function DownloadTasks({ tasks, call, notify, source }: Props) {
-  const planIds = new Set(
-    tasks
-      .filter((task) => task.download?.kind === "plan")
-      .map((task) => task.id),
-  );
-  const roots = tasks.filter(
-    (task) => !task.download?.planId || !planIds.has(task.download.planId),
-  );
+function DownloadTasks({ tasks, call, notify, source }: Props) {
+  const { roots, stageChildren } = useMemo(() => {
+    const planIds = new Set(
+      tasks
+        .filter((task) => task.download?.kind === "plan")
+        .map((task) => task.id),
+    );
+    const roots = tasks.filter(
+      (task) => !task.download?.planId || !planIds.has(task.download.planId),
+    );
+    const stageChildren = new Map<string, Task[]>();
+    for (const task of tasks) {
+      if (!task.download?.planId) continue;
+      const key = `${task.download.planId}\0${task.download.stageId}`;
+      const group = stageChildren.get(key) || [];
+      group.push(task);
+      stageChildren.set(key, group);
+    }
+    return { roots, stageChildren };
+  }, [tasks]);
   if (!roots.length)
     return (
       <GlassSurface className="download-tasks-empty">
@@ -473,11 +484,8 @@ export default function DownloadTasks({ tasks, call, notify, source }: Props) {
               )}
               <div className="download-plan-stages">
                 {task.download.stages?.map((stage) => {
-                  const children = tasks.filter(
-                    (child) =>
-                      child.download?.planId === task.id &&
-                      child.download.stageId === stage.id,
-                  );
+                  const children =
+                    stageChildren.get(`${task.id}\0${stage.id}`) || [];
                   return (
                     <Stage
                       key={stage.id}
@@ -501,9 +509,16 @@ export default function DownloadTasks({ tasks, call, notify, source }: Props) {
                   );
                 })}
               </div>
-              {active(task) && task.download.stages?.some((stage) => stage.id === "loader" && ["resolving", "running"].includes(stage.status)) && (
-                <p className="muted">官方安装器运行期间，取消将在安全检查点生效。</p>
-              )}
+              {active(task) &&
+                task.download.stages?.some(
+                  (stage) =>
+                    stage.id === "loader" &&
+                    ["resolving", "running"].includes(stage.status),
+                ) && (
+                  <p className="muted">
+                    官方安装器运行期间，取消将在安全检查点生效。
+                  </p>
+                )}
               <TaskControls
                 task={task}
                 call={call}
@@ -524,3 +539,5 @@ export default function DownloadTasks({ tasks, call, notify, source }: Props) {
     </div>
   );
 }
+
+export default memo(DownloadTasks);

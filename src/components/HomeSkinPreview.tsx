@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { IdleAnimation, SkinViewer } from "skinview3d";
 import { ChevronDown, Pause, Play, RefreshCw, UserRound } from "lucide-react";
 import type { Account, LauncherAPI } from "../../shared/types";
 import { defaultSkinTexture } from "../../shared/default-skin";
 import { GlassSurface } from "../ui/Glass";
+import {
+  manageSkinPreview,
+  type SkinPreviewRenderer,
+} from "../ui/skin-preview-renderer";
 import "./home-skin.css";
 
 type Props = {
@@ -51,7 +55,7 @@ function appearance(
   };
 }
 
-export default function HomeSkinPreview({
+function HomeSkinPreview({
   accounts,
   selectedAccountId,
   call,
@@ -76,6 +80,7 @@ export default function HomeSkinPreview({
   const canvas = useRef<HTMLCanvasElement>(null);
   const fallbackCanvas = useRef<HTMLCanvasElement>(null);
   const viewer = useRef<SkinViewer | null>(null);
+  const renderer = useRef<SkinPreviewRenderer | null>(null);
   const profileGeneration = useRef(0);
   const textureGeneration = useRef(0);
   const switchingRef = useRef(false);
@@ -125,7 +130,8 @@ export default function HomeSkinPreview({
         height: Math.max(260, stage.current.clientHeight),
         zoom: 0.8,
         fov: 40,
-        pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+        pixelRatio: 1,
+        renderPaused: true,
         enableControls: true,
       });
       instance.playerObject.rotation.y = -0.24;
@@ -143,31 +149,16 @@ export default function HomeSkinPreview({
     const updateMotion = () => {
       instance.animation = motion.matches ? null : new IdleAnimation();
       if (instance.animation) instance.animation.speed = 0.55;
+      renderer.current?.invalidate();
     };
     updateMotion();
     motion.addEventListener("change", updateMotion);
-    const resize = new ResizeObserver(() => {
-      if (!stage.current || instance.disposed) return;
-      const { width, height } = stage.current.getBoundingClientRect();
-      if (width > 0 && height > 0) instance.setSize(width, Math.max(1, height));
-    });
-    resize.observe(stage.current);
-    let visible = true;
-    const updateVisibility = () => {
-      if (!instance.disposed)
-        instance.renderPaused = !visible || document.hidden;
-    };
-    const intersection = new IntersectionObserver(([entry]) => {
-      visible = entry.isIntersecting;
-      updateVisibility();
-    });
-    intersection.observe(stage.current);
-    document.addEventListener("visibilitychange", updateVisibility);
+    const rendering = manageSkinPreview(instance, stage.current);
+    renderer.current = rendering;
     return () => {
       textureGeneration.current++;
-      resize.disconnect();
-      intersection.disconnect();
-      document.removeEventListener("visibilitychange", updateVisibility);
+      rendering.dispose();
+      renderer.current = null;
       motion.removeEventListener("change", updateMotion);
       instance.dispose();
       viewer.current = null;
@@ -179,6 +170,7 @@ export default function HomeSkinPreview({
     const instance = viewer.current;
     instance?.loadSkin(null);
     instance?.loadCape(null);
+    renderer.current?.invalidate();
     setUsingDefault(true);
     let skinImage: HTMLImageElement | undefined;
     let capeImage: HTMLImageElement | undefined;
@@ -200,6 +192,7 @@ export default function HomeSkinPreview({
             instance.loadSkin(skinImage!, {
               model: !isDefault && current.slim ? "slim" : "default",
             });
+          renderer.current?.invalidate();
           const target = fallbackCanvas.current;
           if (target) {
             const context = target.getContext("2d")!;
@@ -244,10 +237,14 @@ export default function HomeSkinPreview({
           } catch {
             instance.loadCape(null);
           }
+          renderer.current?.invalidate();
         }
       };
       capeImage.onerror = () => {
-        if (alive()) instance.loadCape(null);
+        if (alive()) {
+          instance.loadCape(null);
+          renderer.current?.invalidate();
+        }
       };
       capeImage.src = current.cape;
     }
@@ -272,7 +269,7 @@ export default function HomeSkinPreview({
   ]);
 
   useEffect(() => {
-    if (viewer.current) viewer.current.autoRotate = rotating;
+    renderer.current?.setRotating(rotating);
   }, [rotating]);
 
   const refreshAppearance = async () => {
@@ -403,3 +400,5 @@ export default function HomeSkinPreview({
     </GlassSurface>
   );
 }
+
+export default memo(HomeSkinPreview);

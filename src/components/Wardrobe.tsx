@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { SkinViewer, WalkingAnimation } from "skinview3d";
 import { loadSkinToCanvas } from "skinview-utils";
 import {
@@ -29,6 +29,10 @@ import {
 } from "../../shared/default-skin";
 import SkinLibrary, { type SkinLibraryDraft } from "./SkinLibrary";
 import { GlassBackdrop, GlassSurface } from "../ui/Glass";
+import {
+  manageSkinPreview,
+  type SkinPreviewRenderer,
+} from "../ui/skin-preview-renderer";
 import "./wardrobe.css";
 
 type Props = {
@@ -89,12 +93,7 @@ function skinDataUrl(source: string): Promise<string> {
   });
 }
 
-export default function Wardrobe({
-  accounts,
-  selectedAccountId,
-  call,
-  notify,
-}: Props) {
+function Wardrobe({ accounts, selectedAccountId, call, notify }: Props) {
   const [accountId, setAccountId] = useState(
     selectedAccountId ?? accounts[0]?.id ?? "",
   );
@@ -110,7 +109,7 @@ export default function Wardrobe({
   const [variant, setVariant] = useState<"classic" | "slim">("classic");
   const [localSkin, setLocalSkin] = useState<Texture | null>(null);
   const [localCape, setLocalCape] = useState<Texture | null>(null);
-  const [rotating, setRotating] = useState(true);
+  const [rotating, setRotating] = useState(false);
   const [viewerError, setViewerError] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [libraryDraft, setLibraryDraft] = useState<SkinLibraryDraft | null>(
@@ -123,6 +122,7 @@ export default function Wardrobe({
   const previewCanvas = useRef<HTMLCanvasElement>(null);
   const editCanvas = useRef<HTMLCanvasElement>(null);
   const viewer = useRef<SkinViewer | null>(null);
+  const renderer = useRef<SkinPreviewRenderer | null>(null);
   const dragging = useRef(false);
   const history = useRef<ImageData[]>([]);
   const editorReady = useRef(false);
@@ -188,12 +188,13 @@ export default function Wardrobe({
         canvas: previewCanvas.current,
         width: stage.current.clientWidth,
         height: 520,
-        pixelRatio: Math.min(window.devicePixelRatio, 2),
+        pixelRatio: 1,
+        renderPaused: true,
         zoom: 0.74,
         fov: 42,
         enableControls: true,
       });
-      instance.autoRotate = true;
+      instance.autoRotate = false;
       instance.autoRotateSpeed = 0.35;
       const animation = new WalkingAnimation();
       animation.speed = 0.32;
@@ -207,16 +208,11 @@ export default function Wardrobe({
       setViewerError(true);
       return;
     }
-    const resize = new ResizeObserver(() => {
-      if (stage.current && !instance.disposed)
-        instance.setSize(
-          stage.current.clientWidth,
-          Math.max(500, stage.current.clientHeight),
-        );
-    });
-    resize.observe(stage.current);
+    const rendering = manageSkinPreview(instance, stage.current);
+    renderer.current = rendering;
     return () => {
-      resize.disconnect();
+      rendering.dispose();
+      renderer.current = null;
       instance.dispose();
       viewer.current = null;
     };
@@ -230,22 +226,33 @@ export default function Wardrobe({
       instance.loadSkin(skinSource, {
         model: variant === "slim" ? "slim" : "default",
       }),
-    ).catch(() => {
-      if (!cancelled)
-        notify("皮肤纹理加载失败。可导入本地 PNG 继续预览与编辑。");
-    });
-    if (capeSource)
-      Promise.resolve(instance.loadCape(capeSource)).catch(() => {
-        if (!cancelled) notify("披风纹理加载失败，请尝试本地 PNG。");
+    )
+      .then(() => {
+        if (!cancelled) renderer.current?.invalidate();
+      })
+      .catch(() => {
+        if (!cancelled)
+          notify("皮肤纹理加载失败。可导入本地 PNG 继续预览与编辑。");
       });
-    else instance.loadCape(null);
+    if (capeSource)
+      Promise.resolve(instance.loadCape(capeSource))
+        .then(() => {
+          if (!cancelled) renderer.current?.invalidate();
+        })
+        .catch(() => {
+          if (!cancelled) notify("披风纹理加载失败，请尝试本地 PNG。");
+        });
+    else {
+      instance.loadCape(null);
+      renderer.current?.invalidate();
+    }
     return () => {
       cancelled = true;
     };
   }, [skinSource, capeSource, variant, notify]);
 
   useEffect(() => {
-    if (viewer.current) viewer.current.autoRotate = rotating;
+    renderer.current?.setRotating(rotating);
   }, [rotating]);
 
   useEffect(() => {
@@ -410,6 +417,7 @@ export default function Wardrobe({
                       0.35,
                       viewer.current.zoom - 0.1,
                     );
+                  renderer.current?.invalidate();
                 }}
               >
                 <ZoomOut size={16} />
@@ -423,6 +431,7 @@ export default function Wardrobe({
                       1.15,
                       viewer.current.zoom + 0.1,
                     );
+                  renderer.current?.invalidate();
                 }}
               >
                 <ZoomIn size={16} />
@@ -434,6 +443,7 @@ export default function Wardrobe({
                   if (viewer.current) {
                     viewer.current.resetCameraPose();
                     viewer.current.zoom = 0.74;
+                    renderer.current?.invalidate();
                   }
                 }}
               >
@@ -859,3 +869,5 @@ export default function Wardrobe({
     </div>
   );
 }
+
+export default memo(Wardrobe);

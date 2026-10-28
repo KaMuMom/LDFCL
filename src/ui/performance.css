@@ -1,0 +1,29 @@
+/* Keep input feedback on the compositor; large panel blurs and animated
+   shadows/widths are costly on integrated graphics. The layout is shared. */
+html[data-performance="efficient"] button {
+  transition-property: color, opacity, transform;
+}
+
+html[data-performance="efficient"] .modal-backdrop {
+  backdrop-filter: none;
+}
+
+html[data-performance="efficient"] .progress > i {
+  transition: none;
+}
+
+/* Offscreen cards keep their place without laying out or painting descendants.
+   Do not apply containment to forms, dialogs, or sticky navigation. */
+.download-task-card {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 180px;
+}
+
+.route-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 180px;
+  color: var(--muted);
+}

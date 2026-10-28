@@ -1,53 +1,141 @@
 import {
+  lazy,
+  memo,
+  Suspense,
   useEffect,
   useRef,
+  useState,
+  useSyncExternalStore,
   type ComponentPropsWithoutRef,
   type ElementType,
   type CSSProperties,
+  type RefObject,
 } from "react";
-import LiquidGlass from "liquid-glass-react";
+import "./glass-performance.css";
+
+// The default material needs no SVG refraction pipeline or extra JavaScript.
+const LiquidGlass = lazy(() => import("liquid-glass-react"));
 
 const stationary = { x: 0, y: 0 };
+const performanceSubscribers = new Set<() => void>();
+let performanceObserver: MutationObserver | undefined;
 
-/** Keep the upstream refraction behind semantic, selectable application content. */
-export function GlassBackdrop({ radius = 24 }: { radius?: number }) {
-  const host = useRef<HTMLDivElement>(null);
+function qualityEnabled() {
+  return document.documentElement.dataset.performance === "quality";
+}
+
+function subscribePerformance(listener: () => void) {
+  performanceSubscribers.add(listener);
+  if (!performanceObserver) {
+    performanceObserver = new MutationObserver(() => {
+      performanceSubscribers.forEach((notify) => notify());
+    });
+    performanceObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-performance"],
+    });
+  }
+  return () => {
+    performanceSubscribers.delete(listener);
+    if (!performanceSubscribers.size) {
+      performanceObserver?.disconnect();
+      performanceObserver = undefined;
+    }
+  };
+}
+
+const visibleSubscribers = new Set<() => void>();
+const pageVisible = () => document.visibilityState !== "hidden";
+const notifyVisibility = () => visibleSubscribers.forEach((notify) => notify());
+
+function subscribeVisibility(listener: () => void) {
+  if (!visibleSubscribers.size) {
+    document.addEventListener("visibilitychange", notifyVisibility);
+  }
+  visibleSubscribers.add(listener);
+  return () => {
+    visibleSubscribers.delete(listener);
+    if (!visibleSubscribers.size) {
+      document.removeEventListener("visibilitychange", notifyVisibility);
+    }
+  };
+}
+
+const intersectionSubscribers = new Map<Element, (visible: boolean) => void>();
+let intersectionObserver: IntersectionObserver | undefined;
+
+function observeVisibility(
+  element: Element,
+  notify: (visible: boolean) => void,
+) {
+  if (typeof IntersectionObserver === "undefined") {
+    notify(true);
+    return () => {};
+  }
+  intersectionObserver ??= new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      intersectionSubscribers.get(entry.target)?.(entry.isIntersecting);
+    });
+  });
+  intersectionSubscribers.set(element, notify);
+  intersectionObserver.observe(element);
+  return () => {
+    intersectionObserver?.unobserve(element);
+    intersectionSubscribers.delete(element);
+    if (!intersectionSubscribers.size) {
+      intersectionObserver?.disconnect();
+      intersectionObserver = undefined;
+    }
+  };
+}
+
+// Upstream measures every mounted panel on window.resize. Batch all local
+// ResizeObserver notifications, so one changed layout does not fan out N times.
+let resizeFrame = 0;
+function scheduleGlassResize() {
+  if (resizeFrame) return;
+  resizeFrame = requestAnimationFrame(() => {
+    resizeFrame = 0;
+    window.dispatchEvent(new Event("resize"));
+  });
+}
+
+function QualityRenderer({
+  host,
+  radius,
+}: {
+  host: RefObject<HTMLDivElement | null>;
+  radius: number;
+}) {
+  const [intersects, setIntersects] = useState(false);
+  const documentVisible = useSyncExternalStore(
+    subscribeVisibility,
+    pageVisible,
+  );
+  const active = intersects && documentVisible;
+
   useEffect(() => {
     const element = host.current;
-    if (!element) return;
-    const surface = element.parentElement;
-    // Scrollable dialogs keep the material over their viewport while content moves.
-    const followViewport = () => {
-      element.style.transform = `translateY(${surface?.scrollTop || 0}px)`;
-    };
-    surface?.addEventListener("scroll", followViewport, { passive: true });
-    followViewport();
-    let frame = 0;
+    if (element) return observeVisibility(element, setIntersects);
+  }, [host]);
+
+  useEffect(() => {
+    const element = host.current;
+    if (!active || !element) return;
     let previous = "";
     const observer = new ResizeObserver(([entry]) => {
       const size = `${Math.round(entry.contentRect.width)}:${Math.round(entry.contentRect.height)}`;
       if (size === previous) return;
       previous = size;
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() =>
-        window.dispatchEvent(new Event("resize")),
-      );
+      scheduleGlassResize();
     });
     observer.observe(element);
-    return () => {
-      surface?.removeEventListener("scroll", followViewport);
-      observer.disconnect();
-      cancelAnimationFrame(frame);
-    };
-  }, []);
+    return () => observer.disconnect();
+  }, [active, host]);
+
+  if (!active) return null;
   return (
-    <div
-      ref={host}
-      className="glass-backdrop"
-      style={{ "--glass-radius": `${radius}px` } as CSSProperties}
-      aria-hidden="true"
-      inert
-    >
+    <Suspense fallback={null}>
       <LiquidGlass
         className="liquid-renderer"
         displacementScale={36}
@@ -69,9 +157,48 @@ export function GlassBackdrop({ radius = 24 }: { radius?: number }) {
       >
         <span className="liquid-fill" />
       </LiquidGlass>
-    </div>
+    </Suspense>
   );
 }
+
+/** Keep the upstream refraction behind semantic, selectable application content. */
+export const GlassBackdrop = memo(function GlassBackdrop({
+  radius = 24,
+}: {
+  radius?: number;
+}) {
+  const host = useRef<HTMLDivElement>(null);
+  const quality = useSyncExternalStore(subscribePerformance, qualityEnabled);
+  useEffect(() => {
+    const element = host.current;
+    if (!element) return;
+    const surface = element.parentElement;
+    // Scrollable dialogs keep the material over their viewport while content moves.
+    let previousScroll = -1;
+    const followViewport = () => {
+      const scrollTop = surface?.scrollTop || 0;
+      if (scrollTop === previousScroll) return;
+      previousScroll = scrollTop;
+      element.style.transform = scrollTop ? `translateY(${scrollTop}px)` : "";
+    };
+    surface?.addEventListener("scroll", followViewport, { passive: true });
+    followViewport();
+    return () => {
+      surface?.removeEventListener("scroll", followViewport);
+    };
+  }, []);
+  return (
+    <div
+      ref={host}
+      className="glass-backdrop"
+      style={{ "--glass-radius": `${radius}px` } as CSSProperties}
+      aria-hidden="true"
+      inert
+    >
+      {quality && <QualityRenderer host={host} radius={radius} />}
+    </div>
+  );
+});
 
 type SurfaceProps<T extends ElementType> = {
   as?: T;

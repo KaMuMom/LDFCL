@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowUpRight,
   Box,
   Check,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   FolderOpen,
   Import,
   Layers,
@@ -60,6 +62,61 @@ const validTab = (tab: string) =>
   ["mods", "overview", "game", "advanced", "health", "packs"].includes(tab)
     ? tab
     : "mods";
+const PAGE_SIZE = 50;
+
+function Pagination({
+  label,
+  total,
+  page,
+  setPage,
+  disabled = false,
+}: {
+  label: string;
+  total: number;
+  page: number;
+  setPage: (page: number) => void;
+  disabled?: boolean;
+}) {
+  const pages = Math.ceil(total / PAGE_SIZE);
+  if (pages <= 1) return null;
+  return (
+    <nav className="instance-pagination" aria-label={`${label}分页`}>
+      <span className="muted">
+        共 {total} 个{label}
+      </span>
+      <div className="instance-pagination-controls">
+        <button
+          className="icon-button"
+          aria-label={`${label}上一页`}
+          disabled={disabled || page === 0}
+          onClick={() => setPage(page - 1)}
+        >
+          <ChevronLeft size={16} />
+        </button>
+        <select
+          aria-label={`${label}页码`}
+          value={page}
+          disabled={disabled}
+          onChange={(event) => setPage(Number(event.target.value))}
+        >
+          {Array.from({ length: pages }, (_, index) => (
+            <option key={index} value={index}>
+              第 {index + 1} / {pages} 页
+            </option>
+          ))}
+        </select>
+        <button
+          className="icon-button"
+          aria-label={`${label}下一页`}
+          disabled={disabled || page === pages - 1}
+          onClick={() => setPage(page + 1)}
+        >
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    </nav>
+  );
+}
 
 function Empty({
   icon: Icon,
@@ -97,6 +154,8 @@ export default function Instances({
 }: Props) {
   const [tab, setTab] = useState(() => validTab(initialTab));
   const [query, setQuery] = useState("");
+  const [versionPage, setVersionPage] = useState(0);
+  const versionList = useRef<HTMLDivElement>(null);
   const [selecting, setSelecting] = useState("");
   const [importing, setImporting] = useState(false);
   const mounted = useRef(true);
@@ -133,18 +192,57 @@ export default function Instances({
     }
   };
   const search = query.trim().toLocaleLowerCase();
-  const filtered = instances.filter((version) =>
-    [
-      version.name,
-      version.version,
-      version.loader,
-      loaderName(version.loader),
-      version.loaderVersion || "",
-    ]
-      .join(" ")
-      .toLocaleLowerCase()
-      .includes(search),
+  const versionSearchIndex = useMemo(
+    () =>
+      instances.map((version) => ({
+        version,
+        search: [
+          version.name,
+          version.version,
+          version.loader,
+          loaderName(version.loader),
+          version.loaderVersion || "",
+        ]
+          .join(" ")
+          .toLocaleLowerCase(),
+      })),
+    [instances],
   );
+  const filtered = useMemo(
+    () =>
+      versionSearchIndex
+        .filter((entry) => entry.search.includes(search))
+        .map((entry) => entry.version),
+    [versionSearchIndex, search],
+  );
+  const selectedIndex = filtered.findIndex(
+    (version) => version.id === instance?.id,
+  );
+  const currentVersionPage = Math.min(
+    versionPage,
+    Math.max(0, Math.ceil(filtered.length / PAGE_SIZE) - 1),
+  );
+  const visibleVersions = filtered.slice(
+    currentVersionPage * PAGE_SIZE,
+    (currentVersionPage + 1) * PAGE_SIZE,
+  );
+  useEffect(() => {
+    setVersionPage(
+      selectedIndex >= 0 ? Math.floor(selectedIndex / PAGE_SIZE) : 0,
+    );
+  }, [instance?.id, selectedIndex, gameRoot, search]);
+  useEffect(() => {
+    const list = versionList.current;
+    if (!list) return;
+    list.scrollTop = 0;
+    const selected = list.querySelector<HTMLElement>("[aria-pressed='true']");
+    if (selected) {
+      const itemBox = selected.getBoundingClientRect();
+      const listBox = list.getBoundingClientRect();
+      if (itemBox.bottom > listBox.bottom)
+        list.scrollTop = itemBox.bottom - listBox.bottom;
+    }
+  }, [currentVersionPage, instance?.id, search]);
   return (
     <div className="instances-page">
       <div className="page-heading instances-page-heading">
@@ -203,11 +301,21 @@ export default function Instances({
               aria-label="搜索游戏版本"
               placeholder="搜索游戏版本"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setVersionPage(0);
+              }}
             />
           </label>
-          <div className="instance-list">
-            {filtered.map((version) => (
+          <Pagination
+            label="版本"
+            total={filtered.length}
+            page={currentVersionPage}
+            setPage={setVersionPage}
+            disabled={!!selecting}
+          />
+          <div className="instance-list" ref={versionList}>
+            {visibleVersions.map((version) => (
               <button
                 className={`version-choice ${instance?.id === version.id ? "selected" : ""}`}
                 key={version.id}
@@ -307,6 +415,48 @@ function InstanceManager({
   setTab: (tab: string) => void;
 }) {
   const [mods, setMods] = useState<any[]>([]);
+  const [modQuery, setModQuery] = useState("");
+  const [modPage, setModPage] = useState(0);
+  const modList = useRef<HTMLDivElement>(null);
+  const modSearchIndex = useMemo(
+    () =>
+      mods.map((mod) => ({
+        mod,
+        search: [
+          mod.displayName,
+          mod.nameZh,
+          mod.originalName,
+          mod.name,
+          mod.id,
+          mod.file,
+          mod.filename,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLocaleLowerCase(),
+      })),
+    [mods],
+  );
+  const modSearch = modQuery.trim().toLocaleLowerCase();
+  const filteredMods = useMemo(
+    () =>
+      modSearchIndex
+        .filter((entry) => entry.search.includes(modSearch))
+        .map((entry) => entry.mod),
+    [modSearchIndex, modSearch],
+  );
+  const currentModPage = Math.min(
+    modPage,
+    Math.max(0, Math.ceil(filteredMods.length / PAGE_SIZE) - 1),
+  );
+  const visibleMods = filteredMods.slice(
+    currentModPage * PAGE_SIZE,
+    (currentModPage + 1) * PAGE_SIZE,
+  );
+  useEffect(() => {
+    if (modList.current) modList.current.scrollTop = 0;
+    setModPage(currentModPage);
+  }, [currentModPage, modSearch]);
   const [duplicates, setDuplicates] = useState<any[]>([]);
   const [updates, setUpdates] = useState<any[]>([]);
   const [working, setWorking] = useState("");
@@ -610,6 +760,33 @@ function InstanceManager({
               </button>
             </div>
           </div>
+          <label className="instance-search mod-search">
+            <Search size={15} />
+            <input
+              type="search"
+              aria-label="搜索已安装 Mod"
+              placeholder="搜索 Mod 名称、中文名或文件名"
+              value={modQuery}
+              onChange={(event) => {
+                setModQuery(event.target.value);
+                setModPage(0);
+              }}
+            />
+          </label>
+          {modSearch && !modsLoading && !modsError && mods.length > 0 && (
+            <p className="muted mod-search-summary" role="status">
+              找到 {filteredMods.length} 个 Mod，共 {mods.length} 个
+            </p>
+          )}
+          {!modsLoading && !modsError && (
+            <Pagination
+              label="Mod"
+              total={filteredMods.length}
+              page={currentModPage}
+              setPage={setModPage}
+              disabled={!!working}
+            />
+          )}
           {duplicates.length > 0 && (
             <div className="warning-box">
               <AlertTriangle size={17} />
@@ -675,9 +852,15 @@ function InstanceManager({
               title="还没有添加 Mod"
               text="导入本地 .jar 文件，或前往资源下载查找兼容内容。"
             />
+          ) : !filteredMods.length ? (
+            <Empty
+              icon={Search}
+              title="没有匹配的 Mod"
+              text="试试其他名称、中文名或 .jar 文件名。"
+            />
           ) : (
-            <div className="mod-list">
-              {mods.map((m: any) => (
+            <div className="mod-list" ref={modList}>
+              {visibleMods.map((m: any) => (
                 <div
                   key={m.file || m.filename}
                   className={`mod-row ${m.enabled === false ? "disabled" : ""}`}

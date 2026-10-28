@@ -94,6 +94,45 @@
   align-content: start;
   gap: 8px;
   min-width: 0;
+  max-height: min(62vh, 660px);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.instance-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.instance-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.instance-pagination-controls .icon-button {
+  width: 29px;
+  height: 31px;
+}
+
+.instance-pagination-controls select {
+  width: auto;
+  min-width: 0;
+  max-width: 150px;
+  min-height: 31px;
+  padding: 4px 5px;
+  font-size: 11px;
+}
+
+.mod-search-summary {
+  margin: 0;
+  font-size: 12px;
 }
 
 .instance-list > .muted {
@@ -468,6 +507,9 @@
   display: grid;
   gap: 10px;
   min-width: 0;
+  max-height: min(58vh, 640px);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .instance-mods .mod-row {
