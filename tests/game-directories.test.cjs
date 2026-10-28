@@ -6,6 +6,7 @@ const os = require("node:os");
 const { createHash } = require("node:crypto");
 const { EventEmitter } = require("node:events");
 const { PassThrough } = require("node:stream");
+const { captureJavaStdin, decodedJavaInvocation, physicalPath } = require("./helpers/java-invocation.cjs");
 const compiledRoot =
   process.env.LDFCL_TEST_COMPILED_ROOT ||
   path.join(__dirname, "..", "core", "dist");
@@ -553,6 +554,7 @@ test("imported launch uses selected libraries/assets and an isolated gameDir wit
     (file, args, options) => {
       invocation = { file, args, options };
       child = new EventEmitter();
+      captureJavaStdin(child, invocation);
       child.stdout = new PassThrough();
       child.stderr = new PassThrough();
       child.pid = 54321;
@@ -579,29 +581,27 @@ test("imported launch uses selected libraries/assets and an isolated gameDir wit
   );
   assert.equal(launched.pid, 54321);
   const gameDir = path.join(selected, "versions", instance.versionDirectory);
-  assert.equal(invocation.options.cwd, gameDir);
+  const launchedArguments = decodedJavaInvocation(invocation);
+  assert.equal(await fs.realpath(invocation.options.cwd), await fs.realpath(gameDir));
   assert.equal(
-    invocation.args[invocation.args.indexOf("--gameDir") + 1],
-    gameDir,
+    await fs.realpath(launchedArguments.args[launchedArguments.args.indexOf("--gameDir") + 1]),
+    await fs.realpath(gameDir),
   );
   assert.equal(
-    invocation.args[invocation.args.indexOf("--assetsDir") + 1],
-    path.join(selected, "assets"),
+    await physicalPath(launchedArguments.args[launchedArguments.args.indexOf("--assetsDir") + 1]),
+    await physicalPath(path.join(selected, "assets")),
   );
   assert.equal(
-    invocation.args[invocation.args.indexOf("--libraries") + 1],
-    path.join(selected, "libraries"),
+    await physicalPath(launchedArguments.args[launchedArguments.args.indexOf("--libraries") + 1]),
+    await physicalPath(path.join(selected, "libraries")),
   );
   assert.equal(
-    invocation.args[invocation.args.indexOf("-cp") + 1],
-    path.join(selected, "versions", "1.21.1", "1.21.1.jar"),
+    await fs.realpath(launchedArguments.classpath),
+    await fs.realpath(path.join(selected, "versions", "1.21.1", "1.21.1.jar")),
   );
-  assert(
-    invocation.args.some(
-      (arg) =>
-        arg ===
-        "-Djava.library.path=" + path.join(gameDir, ".ldfcl", "natives"),
-    ),
+  assert.equal(
+    await fs.realpath(invocation.args.find((argument) => argument.startsWith("-Djava.library.path=")).slice("-Djava.library.path=".length)),
+    await fs.realpath(path.join(gameDir, ".ldfcl", "natives")),
   );
   assert.match(
     await fs.readFile(path.join(gameDir, "options.txt"), "utf8"),
@@ -721,6 +721,7 @@ test("modern and legacy hardcoded gameDir flags cannot override per-instance iso
     (file, args, options) => {
       invocation = { file, args, options };
       child = new EventEmitter();
+      captureJavaStdin(child, invocation);
       child.stdout = new PassThrough();
       child.stderr = new PassThrough();
       child.pid = 54321;
@@ -785,23 +786,24 @@ test("modern and legacy hardcoded gameDir flags cannot override per-instance iso
         closeOnLaunch: false,
       },
     );
-    assert.equal(invocation.options.cwd, isolated);
-    const flags = invocation.args.filter(
+    const launchedArguments = decodedJavaInvocation(invocation);
+    assert.equal(await fs.realpath(invocation.options.cwd), await fs.realpath(isolated));
+    const flags = launchedArguments.args.filter(
       (argument) =>
         argument === "--gameDir" || argument.startsWith("--gameDir="),
     );
     assert.equal(flags.length, format === "legacy-without-gameDir" ? 0 : 1);
     if (format !== "legacy-without-gameDir") {
       assert.equal(
-        invocation.args[invocation.args.indexOf("--gameDir") + 1],
-        isolated,
+        await fs.realpath(launchedArguments.args[launchedArguments.args.indexOf("--gameDir") + 1]),
+        await fs.realpath(isolated),
       );
       assert.equal(
-        invocation.args[invocation.args.indexOf("--server") + 1],
+        launchedArguments.args[launchedArguments.args.indexOf("--server") + 1],
         "example.invalid",
       );
     }
-    assert(!invocation.args.some((argument) => argument.includes(external)));
+    assert(!launchedArguments.args.some((argument) => argument.includes(external)));
     assert.match(
       await fs.readFile(path.join(isolated, "options.txt"), "utf8"),
       new RegExp(`fullscreen:${format === "modern"}`),

@@ -6,6 +6,7 @@ const path = require("node:path");
 const { createHash } = require("node:crypto");
 const { EventEmitter } = require("node:events");
 const { PassThrough } = require("node:stream");
+const { captureJavaStdin, decodedJavaInvocation } = require("./helpers/java-invocation.cjs");
 const AdmZip = require("adm-zip");
 const compiledRoot =
   process.env.LDFCL_TEST_COMPILED_ROOT ||
@@ -542,6 +543,7 @@ test("launch uses prepared JVM arguments while preserving selected instance cwd 
     (file, args, options) => {
       invocation = { file, args, options };
       child = new EventEmitter();
+      captureJavaStdin(child, invocation);
       child.stdout = new PassThrough();
       child.stderr = new PassThrough();
       child.pid = 54321;
@@ -560,18 +562,18 @@ test("launch uses prepared JVM arguments while preserving selected instance cwd 
     { type: "offline", name: "Alex", uuid: "0123456789abcdef0123456789abcdef" },
     { downloadConcurrency: 2, memoryMode: "manual", memoryMb: 1024 },
   );
-  assert.equal(invocation.options.cwd, game);
+  const launchedArguments = decodedJavaInvocation(invocation);
+  assert.equal(await fs.realpath(invocation.options.cwd), await fs.realpath(game));
   assert.equal(invocation.args.filter((value) => value === "-cp").length, 1);
   assert.equal(
-    invocation.args[invocation.args.indexOf("-cp") + 1],
-    path.join(game, `${id}.jar`),
+    await fs.realpath(launchedArguments.classpath),
+    await fs.realpath(path.join(game, `${id}.jar`)),
   );
   assert(invocation.args.includes("-Xmx1024M"));
   assert(!invocation.args.includes("-Xmx32M"));
-  assert(
-    invocation.args.includes(
-      `-Djava.library.path=${path.join(game, ".ldfcl", "natives")}`,
-    ),
+  assert.equal(
+    await fs.realpath(invocation.args.find((argument) => argument.startsWith("-Djava.library.path=")).slice("-Djava.library.path=".length)),
+    await fs.realpath(path.join(game, ".ldfcl", "natives")),
   );
   child.emit("close", 0);
 });

@@ -287,11 +287,11 @@ export class HealthScanner {
         add({
           id: "logs:historical",
           category: "logs",
-          severity: "warning",
-          title: "历史日志包含警告",
+          severity: "info",
+          title: "上次运行的日志提示",
           detail: `最近 256 KiB 日志中发现 ${warnings.length} 行警告或错误。`,
           suggestion:
-            "打开日志与诊断查看规则分析；历史警告不一定阻止本次启动。",
+            "历史日志仅供参考，不影响本次健康评分；若游戏实际异常，请打开运行日志与诊断。",
         });
     } catch {
       /* Missing logs are normal before first launch. Never expose log contents here. */

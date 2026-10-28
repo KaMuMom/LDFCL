@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { IdleAnimation, SkinViewer } from "skinview3d";
-import { ChevronDown, Pause, RotateCw, UserRound } from "lucide-react";
+import { ChevronDown, Pause, Play, RefreshCw, UserRound } from "lucide-react";
 import type { Account, LauncherAPI } from "../../shared/types";
+import { defaultSkinTexture } from "../../shared/default-skin";
 import { GlassSurface } from "../ui/Glass";
 import "./home-skin.css";
 
@@ -19,44 +20,6 @@ type Appearance = {
   cape?: string;
   slim: boolean;
 };
-
-// The same original Forest Explorer palette used by the wardrobe; no remote asset is required.
-function getDefaultTexture(): string {
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 64;
-  const context = canvas.getContext("2d")!;
-  context.fillStyle = "#bd9270";
-  context.fillRect(0, 0, 32, 16);
-  context.fillRect(40, 16, 16, 16);
-  context.fillRect(32, 48, 16, 16);
-  context.fillStyle = "#302e30";
-  context.fillRect(0, 0, 32, 7);
-  context.fillRect(0, 7, 8, 9);
-  context.fillRect(24, 7, 8, 9);
-  context.fillRect(8, 8, 8, 2);
-  context.fillStyle = "#f6f6ea";
-  context.fillRect(9, 11, 2, 1);
-  context.fillRect(13, 11, 2, 1);
-  context.fillStyle = "#1d3436";
-  context.fillRect(10, 11, 1, 1);
-  context.fillRect(13, 11, 1, 1);
-  context.fillStyle = "#986c57";
-  context.fillRect(11, 13, 2, 1);
-  context.fillStyle = "#5b8d7c";
-  context.fillRect(16, 16, 24, 16);
-  context.fillRect(40, 16, 16, 6);
-  context.fillRect(32, 48, 16, 6);
-  context.fillStyle = "#e2e2cc";
-  context.fillRect(20, 20, 8, 1);
-  context.fillRect(23, 21, 2, 5);
-  context.fillStyle = "#293e48";
-  context.fillRect(0, 16, 16, 16);
-  context.fillRect(16, 48, 16, 16);
-  context.fillStyle = "#1e292e";
-  context.fillRect(0, 29, 16, 3);
-  context.fillRect(16, 61, 16, 3);
-  return canvas.toDataURL("image/png");
-}
 
 function imageUrl(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -99,7 +62,7 @@ export default function HomeSkinPreview({
   const account =
     accounts.find((item) => item.id === selectedAccountId) ?? accounts[0];
   const accountId = account?.id ?? "";
-  const defaultTexture = useMemo(getDefaultTexture, []);
+  const defaultTexture = useMemo(defaultSkinTexture, []);
   const [profile, setProfile] = useState<Appearance>(() =>
     appearance(accountId, account),
   );
@@ -107,6 +70,8 @@ export default function HomeSkinPreview({
   const [fallback, setFallback] = useState(false);
   const [usingDefault, setUsingDefault] = useState(true);
   const [switching, setSwitching] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [textureRevision, setTextureRevision] = useState(0);
   const stage = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const fallbackCanvas = useRef<HTMLCanvasElement>(null);
@@ -128,6 +93,7 @@ export default function HomeSkinPreview({
 
   useEffect(() => {
     const generation = ++profileGeneration.current;
+    setRefreshing(false);
     setProfile(appearance(accountId, account));
     if (!accountId || account?.type === "offline") return;
     // The service returns only public skins/capes. Its token-bearing launch account never reaches here.
@@ -296,11 +262,41 @@ export default function HomeSkinPreview({
         capeImage.onerror = null;
       }
     };
-  }, [skin, current.cape, current.slim, defaultTexture, fallback]);
+  }, [
+    skin,
+    current.cape,
+    current.slim,
+    defaultTexture,
+    fallback,
+    textureRevision,
+  ]);
 
   useEffect(() => {
     if (viewer.current) viewer.current.autoRotate = rotating;
   }, [rotating]);
+
+  const refreshAppearance = async () => {
+    const generation = ++profileGeneration.current;
+    setRefreshing(true);
+    try {
+      const result =
+        accountId && account?.type !== "offline"
+          ? await call<{ skins?: any[]; capes?: any[] }>("skin:profile", {
+              id: accountId,
+            })
+          : account;
+      if (mounted.current && generation === profileGeneration.current) {
+        setProfile(appearance(accountId, result));
+        setTextureRevision((value) => value + 1);
+      }
+    } catch (error: any) {
+      if (mounted.current && generation === profileGeneration.current)
+        notify(error.message || "角色外观刷新失败，请稍后重试。");
+    } finally {
+      if (mounted.current && generation === profileGeneration.current)
+        setRefreshing(false);
+    }
+  };
 
   const select = async (id: string) => {
     if (!id || id === accountId || switchingRef.current) return;
@@ -329,17 +325,28 @@ export default function HomeSkinPreview({
     >
       <div className="home-skin-heading">
         <span>我的角色</span>
-        {!fallback && (
+        <div className="home-skin-actions">
           <button
             className="home-skin-motion"
-            aria-label={rotating ? "暂停自动旋转" : "开启自动旋转"}
-            title={rotating ? "暂停自动旋转" : "开启自动旋转"}
-            aria-pressed={rotating}
-            onClick={() => setRotating(!rotating)}
+            aria-label="刷新角色外观"
+            title="刷新角色外观"
+            disabled={refreshing}
+            onClick={() => void refreshAppearance()}
           >
-            {rotating ? <Pause size={14} /> : <RotateCw size={14} />}
+            <RefreshCw size={14} />
           </button>
-        )}
+          {!fallback && (
+            <button
+              className="home-skin-motion"
+              aria-label={rotating ? "暂停自动旋转" : "开启自动旋转"}
+              title={rotating ? "暂停自动旋转" : "开启自动旋转"}
+              aria-pressed={rotating}
+              onClick={() => setRotating(!rotating)}
+            >
+              {rotating ? <Pause size={14} /> : <Play size={14} />}
+            </button>
+          )}
+        </div>
       </div>
       <div className="home-skin-viewport" ref={stage}>
         <canvas ref={canvas} aria-label="首页角色皮肤预览" hidden={fallback} />

@@ -1,6 +1,6 @@
 {
   "name": "@ldfcl/core",
-  "version": "0.6.2-beta.1",
+  "version": "0.6.2",
   "private": true,
   "description": "Host-independent Minecraft launcher services for LDFCL",
   "license": "MIT",

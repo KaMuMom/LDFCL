@@ -20,6 +20,11 @@
   font-weight: 600;
   padding: 0 3px;
 }
+.home-skin-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
 .home-skin-motion {
   display: grid;
   place-items: center;

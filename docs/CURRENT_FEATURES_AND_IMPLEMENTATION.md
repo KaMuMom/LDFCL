@@ -1,6 +1,6 @@
 # LDFCL 当前功能与实现方式
 
-更新：2026-10-28，当前版本 **0.6.2-beta.1**，源码见 GitHub `main` 分支，对应 [GitHub Release](https://github.com/KaMuMom/LDFCL/releases/tag/v0.6.2-beta.1)。[微软登录配置及授权码改进](0.6.2_BETA_LOGIN.md)说明本次变化；[启动修复](0.6.1_STARTUP_FIX.md)、[P0–P6](P0_P6_IMPLEMENTATION.md)保留已有实现，命令见 [CLI](CLI.md)，成品检查见 [VALIDATION](../VALIDATION.md)。
+更新：2026-10-28，当前发行版本 **0.6.2**，发布通道为 [GitHub Latest](https://github.com/KaMuMom/LDFCL/releases/latest)。本版汇总已验证的启动、路径、下载、皮肤与目录修复，采用用户指定的透明像素图标；旧实例兼容提示默认收起，真正的目录错误独立显示，版本关联与迁移规则保持原样。[发行说明](0.6.2_RELEASE.md)列出变化及验证边界；[微软登录配置](0.6.2_BETA_LOGIN.md)、[启动修复](0.6.1_STARTUP_FIX.md)、[P0–P6](P0_P6_IMPLEMENTATION.md)保留已有实现，命令见 [CLI](CLI.md)，成品检查见 [VALIDATION](../VALIDATION.md)。
 
 ## 架构
 
@@ -69,6 +69,6 @@ React 调用 preload → Electron 注入 Host 的核心 → 文件/API/游戏进
 
 ## 验证与来源
 
-完整自动测试 **333/333** 通过。覆盖文件系统、延迟迁移与原件保护、事务故障/中断、下载HTTP/Range、CLI子进程、本地诊断与配置边界、规则诊断与旧账号/下载/皮肤功能；本地规则诊断测试覆盖当前功能。生产包及历史真实游戏结果见 [最终验证](../VALIDATION.md)，不要把受控服务或模拟进程等同于真实登录或客户端运行。
+完整自动测试 **357/357** 通过。覆盖文件系统、延迟迁移与原件保护、事务故障/中断、下载HTTP/Range、CLI子进程、本地诊断与配置边界、规则诊断与旧账号/下载/皮肤功能；本地规则诊断测试覆盖当前功能。生产包及历史真实游戏结果见 [最终验证](../VALIDATION.md)，不要把受控服务或模拟进程等同于真实登录或客户端运行。
 
 历史与当前上游来源、代码使用范围及许可见 [CREDITS](../CREDITS.md)、[THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES.md)。本轮使用 NeoForge 官方安装器与配置协议，没有复制上游加载器源码；保留既有 UI 依赖及全部致谢。

@@ -1,4 +1,66 @@
 import path from "node:path";
+import type {
+  DownloadFilePage,
+  DownloadFileProgress,
+} from "../../shared/types";
+
+// Keep detailed lists out of progress events: a vanilla asset index can contain
+// tens of thousands of files. The renderer fetches a bounded page on demand.
+const fileLists = new Map<
+  string,
+  { files: DownloadFileProgress[]; active: boolean }
+>();
+export function registerDownloadFiles(
+  id: string,
+  files: DownloadFileProgress[],
+): void {
+  fileLists.set(id, { files, active: true });
+  trimFileLists();
+}
+export function finishDownloadFiles(id: string): void {
+  const list = fileLists.get(id);
+  if (list) list.active = false;
+  trimFileLists();
+}
+function trimFileLists(): void {
+  let count = [...fileLists.values()].reduce(
+    (sum, list) => sum + list.files.length,
+    0,
+  );
+  let completed = [...fileLists.values()].filter((list) => !list.active).length;
+  for (const [id, list] of fileLists) {
+    if (list.active || (count <= 150000 && completed <= 30)) continue;
+    fileLists.delete(id);
+    count -= list.files.length;
+    completed--;
+  }
+}
+export function getDownloadTaskFiles(
+  id: string,
+  offset = 0,
+  limit = 50,
+): DownloadFilePage {
+  if (typeof id !== "string" || id.length > 128)
+    throw new Error("下载任务标识无效");
+  if (
+    !Number.isSafeInteger(offset) ||
+    offset < 0 ||
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > 100
+  )
+    throw new Error("下载文件分页参数无效");
+  const list = fileLists.get(id);
+  if (!list) throw new Error("此任务的文件清单已过期，可查看后续下载任务");
+  return {
+    taskId: id,
+    offset,
+    total: list.files.length,
+    files: list.files
+      .slice(offset, offset + limit)
+      .map((file) => ({ ...file })),
+  };
+}
 
 class TransferQueue {
   private active = 0;

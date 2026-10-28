@@ -19,6 +19,7 @@ const { scanGameDirectory } = require(
 const { GameService } = require(
   path.join(compiledRoot, "core", "services", "game.js"),
 );
+const { DownloadManager } = require(path.join(compiledRoot, "core", "services", "downloads.js"));
 
 function directory(root, layout = "standard") {
   return { id: "directory", name: "目录", path: root, layout };
@@ -213,7 +214,7 @@ test("missing loader provenance fails safely, preserving source and leaving reco
   await profile(root, "1.21.1-forge-random");
   const result = await prepareInstanceDirectories(directory(root), [item]);
   assert.equal(result.prepared, 0);
-  assert.match(result.warnings.join(" "), /加载器原始版本/);
+  assert.match(result.warnings.join(" "), /版本关联信息待确认/);
   assert.equal(item.versionDirectory, undefined);
   assert.equal(
     await fs.readFile(path.join(source, "mods", "example.jar"), "utf8"),
@@ -427,10 +428,10 @@ test("Forge staging publishes processor libraries and flattened profile without 
     },
   );
   const service = new GameService(root, () => {}, { minecraftRoot: root });
-  service.downloads.download = async (_url, file) => {
+  t.mock.method(DownloadManager.prototype, "download", async (_url, file) => {
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, "client");
-  };
+  });
   service.downloads.downloadMany = async () => {};
   const item = await service.install({
     version: "1.21.1",

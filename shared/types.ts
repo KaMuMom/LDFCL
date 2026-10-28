@@ -4,6 +4,8 @@ export interface GameDirectory {
   path: string;
   layout: "standard" | "legacy";
   isDefault?: boolean;
+  available?: boolean;
+  unavailableReason?: string;
 }
 export interface Instance {
   id: string;
@@ -69,6 +71,47 @@ export interface SkinLibraryEntry {
   updatedAt: string;
   dataUrl: string;
 }
+export interface DownloadContext {
+  resourceName?: string;
+  targetInstanceId?: string;
+  targetInstanceName?: string;
+  planId?: string;
+  stageId?: string;
+  planFileId?: string;
+}
+export interface DownloadFileProgress {
+  id: string;
+  name: string;
+  status: "queued" | "downloading" | "completed" | "failed" | "cancelled";
+  receivedBytes: number;
+  totalBytes?: number;
+}
+export interface DownloadFilePage {
+  taskId: string;
+  offset: number;
+  total: number;
+  files: DownloadFileProgress[];
+}
+export interface DownloadPlanStage {
+  id: string;
+  title: string;
+  status:
+    "pending" | "resolving" | "running" | "completed" | "error" | "cancelled";
+  totalFiles?: number;
+  completedFiles?: number;
+  fileListId?: string;
+}
+export interface DownloadTaskProgress extends DownloadContext {
+  kind: "plan" | "files";
+  progressMode: "bytes" | "files" | "indeterminate";
+  phase?: "queued" | "resolving" | "downloading" | "verifying";
+  totalFiles?: number;
+  completedFiles?: number;
+  receivedBytes?: number;
+  totalBytes?: number;
+  activeFiles?: DownloadFileProgress[];
+  stages?: DownloadPlanStage[];
+}
 export interface Task {
   id: string;
   title: string;
@@ -77,6 +120,7 @@ export interface Task {
   detail?: string;
   controllable?: boolean;
   source?: "official" | "bmclapi";
+  download?: DownloadTaskProgress;
 }
 export interface ModpackVersion {
   id: string;
@@ -97,6 +141,7 @@ export interface OptifineVersion {
   preview: boolean;
 }
 export interface State {
+  runningInstanceIds?: string[];
   gameDirectories: GameDirectory[];
   selectedGameDirectoryId?: string;
   instances: Instance[];
@@ -113,6 +158,7 @@ export interface State {
     gameRoot: string;
     defaultGameRoot: string;
     gameDirectoryError?: string;
+    gameDirectoryWarnings?: string[];
   };
 }
 export interface LauncherAPI {

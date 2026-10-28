@@ -9,6 +9,7 @@ import { LAUNCHER_VERSION } from "../../shared/launcher";
 import { effectiveGameOptions } from "../../shared/game-settings";
 import { validateExtraJvmArguments } from "../../shared/jvm-arguments";
 import { CrashDiagnostics } from "./crash-diagnostics";
+import { prepareJavaLaunch } from "./java-launch";
 import { readModMetadata } from "./mod-metadata";
 import type { DiagnosisMod } from "../../shared/diagnostics";
 import { installOptifine, optifineVersions } from "./optifine";
@@ -27,6 +28,8 @@ import {
   Emit,
   requestJson,
   fileHash,
+  type DownloadPlan,
+  type DownloadContext,
 } from "./downloads";
 import {
   JavaManager,
@@ -606,174 +609,229 @@ export class GameService {
   private async prepare(
     metadata: any,
     gameDirectory: string,
+    inputPlan?: DownloadPlan,
+    context?: DownloadContext,
   ): Promise<{ classpath: string[]; natives: string; assetIndex: any }> {
-    await fs.mkdir(gameDirectory, { recursive: true });
-    const files = this.libraryItems(metadata);
-    const clientId = safeId(path.basename(gameDirectory));
-    const clientFile = path.join(
-      this.root,
-      "versions",
-      clientId,
-      `${clientId}.jar`,
-    );
-    const sourceClientId = safeId(metadata._clientId);
-    if (sourceClientId !== clientId) {
-      const sourceFolder = path.join(this.root, "versions", sourceClientId);
-      const sourceFile = path.join(sourceFolder, `${sourceClientId}.jar`);
-      try {
-        const folderStat = await fs.lstat(sourceFolder);
-        const fileStat = await fs.lstat(sourceFile);
-        if (
-          folderStat.isSymbolicLink() ||
-          fileStat.isSymbolicLink() ||
-          !fileStat.isFile()
-        )
-          throw new Error("客户端 JAR 不能使用符号链接或目录联接");
-        await fs
-          .copyFile(sourceFile, clientFile, 1 /* COPYFILE_EXCL */)
-          .catch((error: any) => {
-            if (error.code !== "EEXIST") throw error;
-          });
-      } catch (error: any) {
-        if (error.code !== "ENOENT") throw error;
-      }
-    }
-    let existingClient = false;
-    try {
-      const stat = await fs.lstat(clientFile);
-      if (stat.isSymbolicLink() || !stat.isFile())
-        throw new Error("客户端 JAR 不是普通文件");
-      existingClient = stat.size > 0;
-    } catch (error: any) {
-      if (error.code !== "ENOENT") throw error;
-    }
-    // An imported child's own JAR may be customized. Inherited parent hashes
-    // describe the parent only and must never replace that supplied client.
-    if (
-      metadata.downloads?.client?.url &&
-      (metadata._ownClient || !existingClient)
-    )
-      files.downloads.push({
-        url: metadata.downloads.client.url,
-        path: clientFile,
-        sha1: metadata.downloads.client.sha1,
-        size: metadata.downloads.client.size,
+    const plan =
+      inputPlan ||
+      this.downloads.createPlan({
+        title: `补全 Minecraft ${metadata.minecraftVersion || metadata.id || "游戏"}`,
+        context: {
+          resourceName: `Minecraft ${metadata.minecraftVersion || metadata.id || ""}`,
+          targetInstanceName: path.basename(gameDirectory),
+          ...context,
+        },
+        stages: [
+          { id: "libraries", title: "游戏本体与运行库" },
+          { id: "natives", title: "解压原生运行库" },
+          { id: "assets", title: "音效、贴图与游戏资源" },
+          { id: "logging", title: "日志运行配置" },
+        ],
       });
-    else
-      await fs.access(clientFile).catch(() => {
-        throw new Error("版本未提供客户端 JAR");
-      });
-    await this.downloads.downloadMany(files.downloads, "补全游戏与依赖库");
-    const nativesDirectory = path.join(gameDirectory, ".ldfcl", "natives");
-    const nativesStage = path.join(
-      gameDirectory,
-      ".ldfcl",
-      `natives-new-${randomUUID()}`,
-    );
-    const nativesBackup = path.join(
-      gameDirectory,
-      ".ldfcl",
-      `natives-old-${randomUUID()}`,
-    );
-    await fs.mkdir(nativesStage, { recursive: true });
-    let previousNatives = false;
     try {
-      for (const archive of files.natives)
-        safeExtractZip(new AdmZip(archive.path), nativesStage, (name) =>
-          nativeExtractionAllowed(name, archive.excludes),
-        );
-      try {
-        const stat = await fs.lstat(nativesDirectory);
-        if (stat.isSymbolicLink() || !stat.isDirectory())
-          throw new Error("原生库目录不能使用链接或普通文件");
-        await fs.rename(nativesDirectory, nativesBackup);
-        previousNatives = true;
-      } catch (error: any) {
-        if (error.code !== "ENOENT") throw error;
-      }
-      try {
-        await fs.rename(nativesStage, nativesDirectory);
-      } catch (error) {
-        if (previousNatives) await fs.rename(nativesBackup, nativesDirectory);
-        throw error;
-      }
-      if (previousNatives)
-        await fs.rm(nativesBackup, { recursive: true, force: true });
-    } finally {
-      await fs.rm(nativesStage, { recursive: true, force: true });
-    }
-    let assetIndex: any = { objects: {} };
-    if (metadata.assetIndex?.url) {
-      const assetId = safeId(metadata.assetIndex.id);
-      const indexFile = path.join(
+      await plan.ready();
+      plan.startStage("libraries");
+      await fs.mkdir(gameDirectory, { recursive: true });
+      const files = this.libraryItems(metadata);
+      const clientId = safeId(path.basename(gameDirectory));
+      const clientFile = path.join(
         this.root,
-        "assets",
-        "indexes",
-        `${assetId}.json`,
+        "versions",
+        clientId,
+        `${clientId}.jar`,
       );
-      await this.downloads.download(
-        metadata.assetIndex.url,
-        indexFile,
-        metadata.assetIndex.sha1,
-        metadata.assetIndex.size,
+      const sourceClientId = safeId(metadata._clientId);
+      if (sourceClientId !== clientId) {
+        const sourceFolder = path.join(this.root, "versions", sourceClientId);
+        const sourceFile = path.join(sourceFolder, `${sourceClientId}.jar`);
+        try {
+          const folderStat = await fs.lstat(sourceFolder);
+          const fileStat = await fs.lstat(sourceFile);
+          if (
+            folderStat.isSymbolicLink() ||
+            fileStat.isSymbolicLink() ||
+            !fileStat.isFile()
+          )
+            throw new Error("客户端 JAR 不能使用符号链接或目录联接");
+          await fs
+            .copyFile(sourceFile, clientFile, 1 /* COPYFILE_EXCL */)
+            .catch((error: any) => {
+              if (error.code !== "EEXIST") throw error;
+            });
+        } catch (error: any) {
+          if (error.code !== "ENOENT") throw error;
+        }
+      }
+      let existingClient = false;
+      try {
+        const stat = await fs.lstat(clientFile);
+        if (stat.isSymbolicLink() || !stat.isFile())
+          throw new Error("客户端 JAR 不是普通文件");
+        existingClient = stat.size > 0;
+      } catch (error: any) {
+        if (error.code !== "ENOENT") throw error;
+      }
+      // An imported child's own JAR may be customized. Inherited parent hashes
+      // describe the parent only and must never replace that supplied client.
+      if (
+        metadata.downloads?.client?.url &&
+        (metadata._ownClient || !existingClient)
+      )
+        files.downloads.push({
+          url: metadata.downloads.client.url,
+          path: clientFile,
+          sha1: metadata.downloads.client.sha1,
+          size: metadata.downloads.client.size,
+        });
+      else
+        await fs.access(clientFile).catch(() => {
+          throw new Error("版本未提供客户端 JAR");
+        });
+      await this.downloads.downloadMany(
+        files.downloads,
+        "补全游戏与依赖库",
+        plan.context("libraries"),
       );
-      assetIndex = JSON.parse(await fs.readFile(indexFile, "utf8"));
-      const assets: DownloadItem[] = Object.values(
-        assetIndex.objects || {},
-      ).map((object: any) => {
-        if (!/^[a-f0-9]{40}$/.test(object.hash))
-          throw new Error("无效资源哈希");
-        return {
-          url: `https://resources.download.minecraft.net/${object.hash.slice(0, 2)}/${object.hash}`,
-          path: path.join(
-            this.root,
-            "assets",
-            "objects",
-            object.hash.slice(0, 2),
-            object.hash,
-          ),
-          sha1: object.hash,
-          size: object.size,
-        };
-      });
-      await this.downloads.downloadMany(assets, "补全游戏音效与资源");
-      if (assetIndex.virtual || assetIndex.map_to_resources) {
-        const legacyRoot = assetIndex.map_to_resources
-          ? path.join(gameDirectory, "resources")
-          : path.join(this.root, "assets", "virtual", assetId);
-        for (const [name, value] of Object.entries(assetIndex.objects || {})) {
-          const target = path.resolve(legacyRoot, name);
-          if (!target.startsWith(path.resolve(legacyRoot) + path.sep))
-            throw new Error("资源路径越界");
-          await fs.mkdir(path.dirname(target), { recursive: true });
-          await fs.copyFile(
-            path.join(
+      plan.completeStage("libraries");
+      await plan.ready();
+      plan.startStage("natives");
+      const nativesDirectory = path.join(gameDirectory, ".ldfcl", "natives");
+      const nativesStage = path.join(
+        gameDirectory,
+        ".ldfcl",
+        `natives-new-${randomUUID()}`,
+      );
+      const nativesBackup = path.join(
+        gameDirectory,
+        ".ldfcl",
+        `natives-old-${randomUUID()}`,
+      );
+      await fs.mkdir(nativesStage, { recursive: true });
+      let previousNatives = false;
+      try {
+        for (const archive of files.natives)
+          safeExtractZip(new AdmZip(archive.path), nativesStage, (name) =>
+            nativeExtractionAllowed(name, archive.excludes),
+          );
+        try {
+          const stat = await fs.lstat(nativesDirectory);
+          if (stat.isSymbolicLink() || !stat.isDirectory())
+            throw new Error("原生库目录不能使用链接或普通文件");
+          await fs.rename(nativesDirectory, nativesBackup);
+          previousNatives = true;
+        } catch (error: any) {
+          if (error.code !== "ENOENT") throw error;
+        }
+        try {
+          await fs.rename(nativesStage, nativesDirectory);
+        } catch (error) {
+          if (previousNatives) await fs.rename(nativesBackup, nativesDirectory);
+          throw error;
+        }
+        if (previousNatives)
+          await fs.rm(nativesBackup, { recursive: true, force: true });
+      } finally {
+        await fs.rm(nativesStage, { recursive: true, force: true });
+      }
+      plan.completeStage("natives");
+      await plan.ready();
+      plan.startStage("assets");
+      let assetIndex: any = { objects: {} };
+      if (metadata.assetIndex?.url) {
+        const assetId = safeId(metadata.assetIndex.id);
+        const indexFile = path.join(
+          this.root,
+          "assets",
+          "indexes",
+          `${assetId}.json`,
+        );
+        await this.downloads.downloadVerified(
+          {
+            url: metadata.assetIndex.url,
+            path: indexFile,
+            sha1: metadata.assetIndex.sha1,
+            size: metadata.assetIndex.size,
+          },
+          "下载游戏资源索引",
+          plan.context("assets"),
+        );
+        assetIndex = JSON.parse(await fs.readFile(indexFile, "utf8"));
+        const assets: DownloadItem[] = Object.entries(
+          assetIndex.objects || {},
+        ).map(([name, object]: [string, any]) => {
+          if (!/^[a-f0-9]{40}$/.test(object.hash))
+            throw new Error("无效资源哈希");
+          return {
+            url: `https://resources.download.minecraft.net/${object.hash.slice(0, 2)}/${object.hash}`,
+            path: path.join(
               this.root,
               "assets",
               "objects",
-              (value as any).hash.slice(0, 2),
-              (value as any).hash,
+              object.hash.slice(0, 2),
+              object.hash,
             ),
-            target,
-          );
+            sha1: object.hash,
+            size: object.size,
+            name,
+          };
+        });
+        await this.downloads.downloadMany(
+          assets,
+          "补全游戏音效与资源",
+          plan.context("assets"),
+        );
+        if (assetIndex.virtual || assetIndex.map_to_resources) {
+          const legacyRoot = assetIndex.map_to_resources
+            ? path.join(gameDirectory, "resources")
+            : path.join(this.root, "assets", "virtual", assetId);
+          for (const [name, value] of Object.entries(
+            assetIndex.objects || {},
+          )) {
+            const target = path.resolve(legacyRoot, name);
+            if (!target.startsWith(path.resolve(legacyRoot) + path.sep))
+              throw new Error("资源路径越界");
+            await fs.mkdir(path.dirname(target), { recursive: true });
+            await fs.copyFile(
+              path.join(
+                this.root,
+                "assets",
+                "objects",
+                (value as any).hash.slice(0, 2),
+                (value as any).hash,
+              ),
+              target,
+            );
+          }
         }
       }
+      plan.completeStage("assets");
+      await plan.ready();
+      plan.startStage("logging");
+      if (metadata.logging?.client?.file?.url) {
+        const log = metadata.logging.client.file;
+        const filename = path.join(
+          this.root,
+          "assets",
+          "log_configs",
+          safeId(log.id),
+        );
+        await this.downloads.downloadVerified(
+          { url: log.url, path: filename, sha1: log.sha1, size: log.size },
+          "下载日志运行配置",
+          plan.context("logging"),
+        );
+      }
+      plan.completeStage("logging");
+      if (!inputPlan) plan.complete();
+      return {
+        classpath: [...files.classpath, clientFile],
+        natives: nativesDirectory,
+        assetIndex,
+      };
+    } catch (error) {
+      plan.fail(error);
+      throw error;
     }
-    if (metadata.logging?.client?.file?.url) {
-      const log = metadata.logging.client.file;
-      const filename = path.join(
-        this.root,
-        "assets",
-        "log_configs",
-        safeId(log.id),
-      );
-      await this.downloads.download(log.url, filename, log.sha1, log.size);
-    }
-    return {
-      classpath: [...files.classpath, clientFile],
-      natives: nativesDirectory,
-      assetIndex,
-    };
   }
 
   async install(input: {
@@ -789,8 +847,29 @@ export class GameService {
     this.installing.add(lock);
     const id = randomUUID();
     const stage = path.join(this.dataDir, "cache", `install-${id}`);
+    const plan = this.downloads.createPlan({
+      title: `安装 Minecraft ${input.version}${input.loader && input.loader !== "vanilla" ? ` · ${input.loader}` : ""}`,
+      context: {
+        resourceName: `Minecraft ${input.version}`,
+        targetInstanceId: id,
+        targetInstanceName:
+          input.name?.trim() ||
+          `${input.version}${input.loader && input.loader !== "vanilla" ? ` · ${input.loader}` : ""}`,
+      },
+      stages: [
+        { id: "metadata", title: "解析版本与安装信息" },
+        { id: "loader", title: "安装加载器" },
+        { id: "libraries", title: "游戏本体与运行库" },
+        { id: "natives", title: "解压原生运行库" },
+        { id: "assets", title: "音效、贴图与游戏资源" },
+        { id: "logging", title: "日志运行配置" },
+        { id: "finish", title: "保存独立游戏实例" },
+      ],
+    });
     let allocation: { id: string; path: string } | undefined;
     try {
+      await plan.ready();
+      plan.startStage("metadata");
       await fs.mkdir(this.root, { recursive: true });
       const defaultName = `${input.version}${input.loader && input.loader !== "vanilla" ? "-" + input.loader : ""}`;
       let preferred = defaultName;
@@ -804,13 +883,31 @@ export class GameService {
       await fs.mkdir(stage, { recursive: true });
       // Official installers only see a fresh staging root; native profiles and
       // their worlds cannot be overwritten by a newly installed instance.
-      const worker = new GameService(this.dataDir, this.emit, {
+      const workerEmit: Emit = (event) => {
+        if (event.type === "task" && event.task && !event.task.download) {
+          const task = {
+            ...event.task,
+            download: {
+              ...plan.context("loader"),
+              kind: "files" as const,
+              progressMode: "indeterminate" as const,
+            },
+          };
+          plan.observe(task);
+          this.emit({ ...event, task });
+        } else this.emit(event);
+      };
+      const worker = new GameService(this.dataDir, workerEmit, {
         minecraftRoot: stage,
       });
-      worker.downloads = this.downloads;
-      worker.java = this.java;
+      worker.downloads = this.downloads.scoped(plan.context("metadata"));
       const vanilla = await worker.vanilla(input.version);
       await worker.saveVersion(vanilla);
+      plan.completeStage("metadata");
+      await plan.ready();
+      plan.startStage("loader");
+      worker.downloads = this.downloads.scoped(plan.context("loader"));
+      worker.java = new JavaManager(this.dataDir, workerEmit, worker.downloads);
       let launchVersion = input.version,
         loaderVersion: string | undefined;
       if (input.loader && input.loader !== "vanilla") {
@@ -821,7 +918,7 @@ export class GameService {
         ) {
           if (!vanilla.downloads?.client?.url)
             throw new Error("原版元数据缺少客户端 JAR");
-          await this.downloads.download(
+          await worker.downloads.download(
             vanilla.downloads.client.url,
             path.join(stage, "versions", input.version, `${input.version}.jar`),
             vanilla.downloads.client.sha1,
@@ -837,6 +934,7 @@ export class GameService {
         loaderVersion = profile.loaderVersion;
       }
       const resolved = await worker.metadata(launchVersion);
+      plan.completeStage("loader");
       const own = {
         ...resolved,
         id: allocation.id,
@@ -881,7 +979,10 @@ export class GameService {
           _ownClient: !!own.downloads?.client,
         },
         gameDirectory,
+        plan,
       );
+      await plan.ready();
+      plan.startStage("finish");
       const instance: Instance = {
         id,
         name: (
@@ -906,8 +1007,11 @@ export class GameService {
         JSON.stringify(instance, null, 2),
         "utf8",
       );
+      plan.completeStage("finish");
+      plan.complete();
       return instance;
     } catch (error) {
+      plan.fail(error);
       // This directory was atomically reserved by this installation only.
       if (allocation)
         await fs.rm(allocation.path, { recursive: true, force: true });
@@ -984,7 +1088,11 @@ export class GameService {
     const versionId = await this.launchVersion(instance);
     const metadata = await this.metadata(versionId);
     const gameDirectory = instanceGameDirectory(this.root, instance);
-    const prepared = await this.prepare(metadata, gameDirectory);
+    const prepared = await this.prepare(metadata, gameDirectory, undefined, {
+      resourceName: `Minecraft ${instance.version}`,
+      targetInstanceId: instance.id,
+      targetInstanceName: instance.name,
+    });
     const javaPath = await this.java.ensure(
       metadata.javaVersion?.majorVersion || versionJava(instance.version),
       instance.javaPath || settings.javaPath,
@@ -1100,7 +1208,6 @@ export class GameService {
         );
     const game = isolateGameDirectoryArguments(expandedGame, gameDirectory);
     if (!metadata.mainClass) throw new Error("版本缺少游戏入口");
-    args.push(metadata.mainClass, ...game);
     const secrets = [
       account.accessToken,
       account.refreshToken,
@@ -1127,31 +1234,71 @@ export class GameService {
         /* An unreadable mod must not prevent log capture or game launch. */
       }
     }
-    const session = await this.diagnostics.begin({
-      instanceId: instance.id,
-      gameDirectory,
-      secrets,
-      mods,
-      onLine: (line, stream, runId) =>
-        this.emit({
-          type: "log",
-          instanceId: instance.id,
-          line,
-          stream,
-          runId,
-        }),
-    });
-    this.sessions.set(instance.id, session);
-    const child = spawn(javaPath, args, {
+    const invocation = await prepareJavaLaunch({
+      executable: javaPath,
+      jvmArguments: args,
+      mainClass: metadata.mainClass,
+      gameArguments: game,
+      classpath: prepared.classpath,
       cwd: gameDirectory,
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
+      roots: [this.root, this.dataDir],
     });
+    let session;
+    try {
+      session = await this.diagnostics.begin({
+        instanceId: instance.id,
+        gameDirectory,
+        secrets,
+        mods,
+        onLine: (line, stream, runId) =>
+          this.emit({
+            type: "log",
+            instanceId: instance.id,
+            line,
+            stream,
+            runId,
+          }),
+      });
+    } catch (error) {
+      await invocation.dispose();
+      throw error;
+    }
+    this.sessions.set(instance.id, session);
+    let child: ChildProcess;
+    try {
+      child = spawn(invocation.executable, invocation.args, {
+        cwd: invocation.cwd,
+        windowsHide: true,
+        stdio: [invocation.stdin ? "pipe" : "ignore", "pipe", "pipe"],
+        env: { ...process.env },
+      });
+    } catch (error) {
+      this.sessions.delete(instance.id);
+      await invocation.dispose();
+      const message = error instanceof Error ? error.message : String(error);
+      await session
+        .finish({ exitCode: null, spawnError: message })
+        .catch(() => {});
+      this.emit({
+        type: "game",
+        status: "error",
+        instanceId: instance.id,
+        running: false,
+        error: message,
+      });
+      throw error;
+    }
+    if (invocation.stdin && child.stdin) {
+      // An early JVM failure may close stdin before the payload is drained.
+      // Its exit/error and diagnostics remain authoritative; avoid EPIPE leaks.
+      child.stdin.on("error", () => {});
+      child.stdin.end(invocation.stdin);
+    }
     this.running.set(instance.id, child);
     child.stdout?.on("data", (chunk) => session.capture("stdout", chunk));
     child.stderr?.on("data", (chunk) => session.capture("stderr", chunk));
     child.on("close", (code, signal) => {
+      void invocation.dispose().catch(() => {});
       this.running.delete(instance.id);
       this.sessions.delete(instance.id);
       void session.finish({ exitCode: code, signal }).catch(() => {});
@@ -1165,6 +1312,7 @@ export class GameService {
     });
     return new Promise((resolve, reject) => {
       child.once("error", (error) => {
+        void invocation.dispose().catch(() => {});
         this.running.delete(instance.id);
         this.sessions.delete(instance.id);
         void session

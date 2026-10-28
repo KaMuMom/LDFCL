@@ -1,4 +1,8 @@
-# LDFCL 0.5.0 · 来源、贡献与致谢
+# LDFCL · 来源、贡献与致谢
+
+0.6.2 的 Unicode Java 引导、下载任务展示、默认皮肤和目录恢复逻辑由本项目独立实现，沿用 MIT 许可；Java 源码及可重建脚本一并保留。感谢 GitHub Issues 中的反馈者，帮助定位 #1/#2/#3/#5/#6/#7 的界面、路径和交互问题。既有开源项目贡献与完整许可证继续保留如下。
+
+本版应用图标采用用户提供的像素素材，项目仅转换尺寸与格式；原始图片与图标重建脚本一并保留，素材不作为本项目原创代码声明。
 
 0.5.0 按用户指定的 [rdev/liquid-glass-react](https://github.com/rdev/liquid-glass-react) 文档重构 UI，实际使用 npm 运行依赖 **liquid-glass-react@1.1.1**。感谢 **Max Rovensky** 开发并以 MIT 公开这一组件；上游完整版权声明为 **Copyright 2025 MAX ROVENSKY**。文档及许可证阅读固定在 [提交 ac48eab18d1f7f444ae30002d240cae29c863a21](https://github.com/rdev/liquid-glass-react/tree/ac48eab18d1f7f444ae30002d240cae29c863a21)，运行包的精确版本记录于 package-lock.json。
 

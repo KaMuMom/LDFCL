@@ -2,7 +2,11 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import AdmZip from "adm-zip";
-import type { Instance, ModpackVersion } from "../../shared/types";
+import type {
+  DownloadContext,
+  Instance,
+  ModpackVersion,
+} from "../../shared/types";
 import { LAUNCHER_USER_AGENT } from "../../shared/launcher";
 import {
   assertInstanceGameDirectory,
@@ -164,25 +168,6 @@ export class ContentService {
     )
       throw new Error("整合包不能修改启动器配置或版本元数据");
   }
-  private task(
-    id: string,
-    title: string,
-    progress: number,
-    status: string = "running",
-    detail?: string,
-  ) {
-    this.emit({
-      type: "task",
-      task: {
-        id,
-        title,
-        progress: Math.max(0, Math.min(100, progress)),
-        status,
-        detail,
-      },
-    });
-  }
-
   private async request(route: string, init?: RequestInit): Promise<any> {
     const response = await fetch(`${API}${route}`, {
       ...init,
@@ -230,6 +215,8 @@ export class ContentService {
     dest: string,
     hashes: Hashes = {},
     size?: number,
+    context?: DownloadContext,
+    filename?: string,
   ): Promise<void> {
     this.downloads.concurrency = this.getConcurrency();
     // A new install transaction has a fresh staging name. Keep its network
@@ -255,6 +242,7 @@ export class ContentService {
       {
         url,
         path: cached,
+        name: filename || path.basename(dest).replace(/^[a-f0-9-]{36}-/i, ""),
         sha1: hashes.sha1,
         sha256: hashes.sha256,
         sha512: hashes.sha512,
@@ -263,6 +251,7 @@ export class ContentService {
         requireHttps: true,
       },
       `下载 ${path.basename(dest).replace(/^[a-f0-9-]{36}-/i, "")}`,
+      context,
     );
     await fs.mkdir(path.dirname(dest), { recursive: true });
     const stage = `${dest}.${randomUUID()}.copy`;
@@ -394,15 +383,37 @@ export class ContentService {
       "packs",
       `${version.id}-${safeFile(file.filename)}`,
     );
-    const taskId = randomUUID();
-    this.task(taskId, `下载 ${project.title}`, 0);
+    const plan = this.downloads.createPlan({
+      title: `下载整合包 ${project.title}`,
+      context: {
+        resourceName: `${project.title} · ${version.version_number || version.name || ""}`,
+        targetInstanceName: "新建整合包实例",
+      },
+      stages: [
+        { id: "archive", title: "下载整合包文件" },
+        { id: "inspect", title: "解析游戏版本与文件清单" },
+      ],
+    });
+    plan.setStageFiles("archive", [{ name: file.filename, size: file.size }]);
+    plan.startStage("archive");
     try {
-      await this.download(file.url, dest, file.hashes, file.size);
+      await this.download(
+        file.url,
+        dest,
+        file.hashes,
+        file.size,
+        { ...plan.context("archive", "0"), resourceName: project.title },
+        file.filename,
+      );
+      plan.completeStage("archive");
+      plan.startStage("inspect");
+      await plan.ready();
       const meta = await this.inspectPack(dest);
-      this.task(taskId, `下载 ${project.title}`, 100, "completed");
+      plan.completeStage("inspect");
+      plan.complete();
       return { path: dest, meta };
     } catch (error: any) {
-      this.task(taskId, `下载 ${project.title}`, 0, "error", error.message);
+      plan.fail(error);
       throw error;
     }
   }
@@ -461,7 +472,20 @@ export class ContentService {
   ): Promise<any> {
     await this.translations.load();
     const taskId = randomUUID();
-    this.task(taskId, "安装内容", 0);
+    const plan = this.downloads.createPlan({
+      title: `安装内容到 ${input.instance.name}`,
+      context: {
+        resourceName: input.projectId,
+        targetInstanceId: input.instance.id,
+        targetInstanceName: input.instance.name,
+      },
+      stages: [
+        { id: "resolve", title: "解析内容版本与必需前置" },
+        { id: "content", title: "下载、校验并安装内容" },
+        { id: "finish", title: "完成安装" },
+      ],
+    });
+    plan.startStage("resolve");
     const files: string[] = [];
     const dependencies: {
       projectId: string;
@@ -645,11 +669,28 @@ export class ContentService {
         seenGraphs.add(state);
         selections = next;
       }
-      const installProject = async ({
-        project,
-        version,
-        file,
-      }: Planned): Promise<any> => {
+      plan.completeStage("resolve");
+      plan.setContext({
+        resourceName:
+          order.find((item) => item.project.id === rootProjectId)?.project
+            .title || input.projectId,
+      });
+      plan.setStageFiles(
+        "content",
+        order.map((item) => ({
+          name: item.file.filename,
+          size: item.file.size,
+        })),
+      );
+      plan.startStage("content");
+      const installProject = async (
+        { project, version, file }: Planned,
+        fileIndex: number,
+      ): Promise<any> => {
+        const context = {
+          ...plan.context("content", String(fileIndex)),
+          resourceName: `${project.id === rootProjectId ? "" : "前置 · "}${project.title} ${version.version_number || ""}`,
+        };
         if (project.project_type === "modpack") {
           const packed = path.join(
             this.dataDir,
@@ -657,7 +698,14 @@ export class ContentService {
             "packs",
             safeFile(file.filename),
           );
-          await this.download(file.url, packed, file.hashes, file.size);
+          await this.download(
+            file.url,
+            packed,
+            file.hashes,
+            file.size,
+            context,
+            file.filename,
+          );
           const result = await this.importPack(packed, input.instance);
           files.push(...result.files);
           return result;
@@ -721,7 +769,14 @@ export class ContentService {
               staged,
             );
           } else {
-            await this.download(file.url, staged, file.hashes, file.size);
+            await this.download(
+              file.url,
+              staged,
+              file.hashes,
+              file.size,
+              context,
+              file.filename,
+            );
           }
           try {
             let targetIds = reuse?.ids || [];
@@ -790,7 +845,14 @@ export class ContentService {
             throw error;
           }
         } else {
-          await this.download(file.url, staged, file.hashes, file.size);
+          await this.download(
+            file.url,
+            staged,
+            file.hashes,
+            file.size,
+            context,
+            file.filename,
+          );
         }
         const installedName = filename + (disabled ? ".disabled" : "");
         const dest = path.join(
@@ -855,14 +917,20 @@ export class ContentService {
         };
       };
       let result: any;
-      for (const item of order) {
-        const installed = await installProject(item);
+      for (let index = 0; index < order.length; index++) {
+        await plan.ready();
+        const item = order[index];
+        const installed = await installProject(item, index);
+        plan.completeFile("content", String(index));
         if (item.project.id === rootProjectId) result = installed;
       }
-      this.task(taskId, "内容安装完成", 100, "completed");
+      plan.completeStage("content");
+      plan.startStage("finish");
+      plan.completeStage("finish");
+      plan.complete();
       return { ...result, files, dependencies };
     } catch (error: any) {
-      this.task(taskId, "内容安装失败", 0, "error", error.message);
+      plan.fail(error);
       throw error;
     }
   }
@@ -922,11 +990,25 @@ export class ContentService {
   async importPack(filePath: string, instance: Instance): Promise<any> {
     const taskId = randomUUID();
     const title = "导入整合包";
-    this.task(taskId, title, 0);
+    const plan = this.downloads.createPlan({
+      title: `${title}到 ${instance.name}`,
+      context: {
+        resourceName: path.basename(filePath),
+        targetInstanceId: instance.id,
+        targetInstanceName: instance.name,
+      },
+      stages: [
+        { id: "inspect", title: "解析整合包" },
+        { id: "files", title: "下载整合包所需文件" },
+        { id: "publish", title: "应用配置与安装文件" },
+      ],
+    });
+    plan.startStage("inspect");
     const staging = path.join(this.dataDir, "cache", "pack-staging", taskId);
     try {
       const { zip, index } = await this.readPack(filePath);
       const info = await this.inspectPack(filePath);
+      plan.setContext({ resourceName: info.name || path.basename(filePath) });
       if (
         instance.version !== info.minecraftVersion ||
         instance.loader !== info.loader ||
@@ -940,9 +1022,17 @@ export class ContentService {
         (f: any) => f.env?.client !== "unsupported",
       );
       if (candidates.length > 30000) throw new Error("整合包文件数量超过限制");
+      plan.completeStage("inspect");
+      plan.setStageFiles(
+        "files",
+        candidates.map((file: any) => ({
+          name: file.path,
+          size: file.fileSize,
+        })),
+      );
+      plan.startStage("files");
       const seen = new Set<string>();
-      let completed = 0;
-      await this.parallel(candidates, async (file: any) => {
+      await this.parallel(candidates, async (file: any, index: number) => {
         if (
           !Array.isArray(file.downloads) ||
           !file.downloads.length ||
@@ -957,7 +1047,10 @@ export class ContentService {
         let last: unknown;
         for (const url of file.downloads) {
           try {
-            await this.download(url, dest, file.hashes, file.fileSize);
+            await this.download(url, dest, file.hashes, file.fileSize, {
+              ...plan.context("files", String(index)),
+              resourceName: `${info.name || instance.name} · ${path.basename(file.path)}`,
+            });
             last = undefined;
             break;
           } catch (error) {
@@ -965,14 +1058,11 @@ export class ContentService {
           }
         }
         if (last) throw last;
-        this.task(
-          taskId,
-          title,
-          (++completed / Math.max(1, candidates.length)) * 85,
-          "running",
-          file.path,
-        );
+        plan.completeFile("files", String(index));
       });
+      plan.completeStage("files");
+      plan.startStage("publish");
+      await plan.ready();
       for (const prefix of ["overrides/", "client-overrides/"]) {
         for (const entry of zip
           .getEntries()
@@ -1012,7 +1102,8 @@ export class ContentService {
         }
       };
       await walk(staging);
-      this.task(taskId, title, 100, "completed");
+      plan.completeStage("publish");
+      plan.complete();
       return {
         ...info,
         files,
@@ -1021,7 +1112,7 @@ export class ContentService {
         ).length,
       };
     } catch (error: any) {
-      this.task(taskId, title, 0, "error", error.message);
+      plan.fail(error);
       throw error;
     } finally {
       await fs.rm(staging, { recursive: true, force: true });
@@ -1232,11 +1323,29 @@ export class ContentService {
       files: string[] = [];
     const stage = path.join(this.dataDir, "cache", "updates", taskId);
     await fs.mkdir(stage, { recursive: true });
-    this.task(taskId, "更新模组", 0);
+    const plan = this.downloads.createPlan({
+      title: `更新 ${instance.name} 的模组`,
+      context: {
+        resourceName: "Mod 更新",
+        targetInstanceId: instance.id,
+        targetInstanceName: instance.name,
+      },
+      stages: [
+        { id: "updates", title: "确认更新版本并下载" },
+        { id: "dependencies", title: "补齐更新所需前置" },
+        { id: "publish", title: "应用已校验更新" },
+      ],
+    });
+    plan.setStageFiles(
+      "updates",
+      updates
+        .slice(0, 500)
+        .map((update) => ({ name: String(update.file || "模组更新") })),
+    );
+    plan.startStage("updates");
     try {
       // Re-query versions from the service: renderer-supplied URLs and hashes are never trusted.
       const current = await this.listMods(instance);
-      let done = 0;
       const validated: {
         mod: ModInfo;
         version: any;
@@ -1245,6 +1354,7 @@ export class ContentService {
       }[] = [];
       const requested = new Set<string>();
       for (const update of updates.slice(0, 500)) {
+        await plan.ready();
         if (requested.has(update.file)) continue;
         requested.add(update.file);
         const mod = current.find(
@@ -1264,16 +1374,23 @@ export class ContentService {
         if (!file?.hashes?.sha512) throw new Error("更新文件缺少校验值");
         const filename = safeFile(file.filename);
         const temp = path.join(stage, `${validated.length}-${filename}`);
-        await this.download(file.url, temp, file.hashes, file.size);
-        validated.push({ mod, version, file, temp });
-        this.task(
-          taskId,
-          "更新模组",
-          (++done / Math.max(1, updates.length)) * 85,
-          "running",
-          mod.name,
+        await this.download(
+          file.url,
+          temp,
+          file.hashes,
+          file.size,
+          {
+            ...plan.context("updates", String(validated.length)),
+            resourceName: `${mod.name} → ${version.version_number}`,
+          },
+          file.filename,
         );
+        plan.completeFile("updates", String(validated.length));
+        validated.push({ mod, version, file, temp });
       }
+      plan.completeStage("updates");
+      plan.startStage("dependencies");
+      await plan.ready();
       // Dependencies introduced by a new release must be available before its jar replaces the old one.
       const targets = new Map(
         validated.map((item) => [item.version.project_id, item.version.id]),
@@ -1311,6 +1428,9 @@ export class ContentService {
           installedDependencies.add(key);
         }
       }
+      plan.completeStage("dependencies");
+      plan.startStage("publish");
+      await plan.ready();
       const meta = await this.metadata(instance),
         modsDir = path.join(this.instanceDir(instance), "mods");
       for (const item of validated) {
@@ -1345,10 +1465,11 @@ export class ContentService {
         files.push(filename);
       }
       await this.saveMetadata(instance, meta);
-      this.task(taskId, "模组更新完成", 100, "completed");
+      plan.completeStage("publish");
+      plan.complete();
       return { files };
     } catch (error: any) {
-      this.task(taskId, "模组更新失败", 0, "error", error.message);
+      plan.fail(error);
       throw error;
     } finally {
       await fs.rm(stage, { recursive: true, force: true });

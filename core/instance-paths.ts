@@ -53,8 +53,10 @@ export async function assertPlainTree(file: string): Promise<void> {
 async function versionsRoot(minecraftRoot: string): Promise<string> {
   if (!path.isAbsolute(minecraftRoot))
     throw new Error("游戏目录必须使用绝对路径");
+  // Existing registrations must never resurrect a moved/deleted game root.
+  // Creating the default root belongs to explicit launcher initialization.
   if (!(await exists(minecraftRoot)))
-    await fs.mkdir(minecraftRoot, { recursive: true });
+    throw new Error("游戏目录已不存在，可能已被移动或删除，请重新定位。");
   await plainDirectory(minecraftRoot);
   const versions = path.join(minecraftRoot, "versions");
   await fs.mkdir(versions).catch((error: any) => {
@@ -189,6 +191,28 @@ export async function prepareInstanceDirectories(
 ): Promise<{ prepared: number; migrated: number; warnings: string[] }> {
   const { dataDir, minecraftRoot } = gameDirectoryRoots(directory);
   const result = { prepared: 0, migrated: 0, warnings: [] as string[] };
+  if (directory.layout === "legacy" && !(await exists(minecraftRoot))) {
+    // Legacy data legitimately predates its minecraft child. Only create that
+    // one child for an actual pending old-layout migration. A prepared legacy
+    // registration whose minecraft child was moved is an unavailable root.
+    await plainDirectory(dataDir);
+    const sources = await Promise.all(
+      instances
+        .filter((instance) => !instance.versionDirectory)
+        .map((instance) =>
+          fs
+            .lstat(
+              path.join(dataDir, "instances", safeGameVersionId(instance.id)),
+            )
+            .catch(() => null),
+        ),
+    );
+    if (!sources.some((stat) => stat?.isDirectory() && !stat.isSymbolicLink()))
+      throw new Error("游戏目录已不存在，可能已被移动或删除，请重新定位。");
+    await fs.mkdir(minecraftRoot).catch((error: any) => {
+      if (error.code !== "EEXIST") throw error;
+    });
+  }
   const versions = await versionsRoot(minecraftRoot);
   for (const instance of instances) {
     try {
@@ -279,14 +303,17 @@ export async function prepareInstanceDirectories(
         } catch {
           if (instance.loader !== "vanilla")
             throw new Error(
-              "缺少加载器原始版本记录，已保留旧实例，请重新安装或修复配置",
+              "版本关联信息待确认，旧实例文件已保留；完成关联后即可使用此实例。",
             );
         }
       }
       sourceId ||=
         instance.importedVersionId ||
         (instance.loader === "vanilla" ? instance.version : undefined);
-      if (!sourceId) throw new Error("缺少加载器原始版本记录，无法安全迁移");
+      if (!sourceId)
+        throw new Error(
+          "版本关联信息待确认，旧实例文件已保留；完成关联后即可使用此实例。",
+        );
       safeGameVersionId(sourceId);
       let metadata: any;
       let jar: string | undefined;

@@ -56,6 +56,7 @@ test("failed network transfers persist verified identity and a new process resum
   const body = Buffer.alloc(100000, 7),
     ranges = [];
   let attempts = 0;
+  let fixtureFailure;
   const { directory, url } = await fixture(t, (req, res) => {
     attempts++;
     const offset = Number(
@@ -73,7 +74,37 @@ test("failed network transfers persist verified identity and a new process resum
     });
     if (attempts <= 3) {
       res.write(body.subarray(offset, offset + 4096));
-      setTimeout(() => res.destroy(), 20);
+      // Cutting the socket on a fixed timer races the client's first disk write
+      // when other test workers are busy. Fail only after this attempt's bytes
+      // have actually landed in the real partial, preserving the Range test.
+      let checking = false;
+      let closed = false;
+      const poll = setInterval(async () => {
+        if (checking || closed) return;
+        checking = true;
+        try {
+          const stat = await fs.stat(`${item.path}.part`);
+          if (!closed && stat.size >= offset + 4096) res.destroy();
+        } catch (error) {
+          if (error.code !== "ENOENT") {
+            fixtureFailure = error;
+            res.destroy();
+          }
+        } finally {
+          checking = false;
+        }
+      }, 5);
+      const timeout = setTimeout(() => {
+        fixtureFailure = new Error(
+          "fixture timed out waiting for this attempt's partial bytes on disk",
+        );
+        res.destroy();
+      }, 10000);
+      res.once("close", () => {
+        closed = true;
+        clearInterval(poll);
+        clearTimeout(timeout);
+      });
     } else res.end(body.subarray(offset));
   });
   const item = {
@@ -83,6 +114,7 @@ test("failed network transfers persist verified identity and a new process resum
     sha1: hash(body),
   };
   await assert.rejects(new DownloadManager(directory).downloadVerified(item));
+  assert.equal(fixtureFailure, undefined);
   const retained = (await fs.stat(`${item.path}.part`)).size;
   assert(retained > 0 && retained < body.length);
   await promisify(execFile)(

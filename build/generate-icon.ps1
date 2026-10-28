@@ -1,30 +1,71 @@
+param(
+  [string]$SourcePath = (Join-Path $PSScriptRoot 'icon-source.png')
+)
+
+# The user-provided artwork is retained as icon-source.webp and its lossless
+# PNG decode. Point sampling preserves the transparent pixel-art edges.
 Add-Type -AssemblyName System.Drawing
-$iconBitmap = [System.Drawing.Bitmap]::new(256,256)
-$iconGraphics = [System.Drawing.Graphics]::FromImage($iconBitmap)
-$iconGraphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-$iconGraphics.Clear([System.Drawing.Color]::Transparent)
-$iconBackground = [System.Drawing.Drawing2D.GraphicsPath]::new()
-$iconBackground.AddArc(8,8,72,72,180,90)
-$iconBackground.AddArc(176,8,72,72,270,90)
-$iconBackground.AddArc(176,176,72,72,0,90)
-$iconBackground.AddArc(8,176,72,72,90,90)
-$iconBackground.CloseFigure()
-$iconBrush = [System.Drawing.Drawing2D.LinearGradientBrush]::new([System.Drawing.Point]::new(0,0),[System.Drawing.Point]::new(256,256),[System.Drawing.Color]::FromArgb(113,157,119),[System.Drawing.Color]::FromArgb(45,94,66))
-$iconGraphics.FillPath($iconBrush,$iconBackground)
-$iconPen = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(235,246,220),8)
-$iconPen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
-$iconTop = [System.Drawing.Point[]]@([System.Drawing.Point]::new(128,55),[System.Drawing.Point]::new(192,91),[System.Drawing.Point]::new(128,128),[System.Drawing.Point]::new(64,91))
-$iconGraphics.DrawPolygon($iconPen,$iconTop)
-$iconGraphics.DrawLines($iconPen,[System.Drawing.Point[]]@([System.Drawing.Point]::new(64,91),[System.Drawing.Point]::new(64,163),[System.Drawing.Point]::new(128,200),[System.Drawing.Point]::new(192,163),[System.Drawing.Point]::new(192,91)))
-$iconGraphics.DrawLine($iconPen,128,128,128,200)
-$iconBitmap.Save((Join-Path $PSScriptRoot '../public/icon.png'),[System.Drawing.Imaging.ImageFormat]::Png)
-$iconStream = [System.IO.MemoryStream]::new()
-$iconBitmap.Save($iconStream,[System.Drawing.Imaging.ImageFormat]::Png)
-$iconBytes = $iconStream.ToArray()
-$iconFile = [System.IO.File]::Create((Join-Path $PSScriptRoot 'icon.ico'))
-$iconWriter = [System.IO.BinaryWriter]::new($iconFile)
-$iconWriter.Write([uint16]0); $iconWriter.Write([uint16]1); $iconWriter.Write([uint16]1)
-$iconWriter.Write([byte]0); $iconWriter.Write([byte]0); $iconWriter.Write([byte]0); $iconWriter.Write([byte]0)
-$iconWriter.Write([uint16]1); $iconWriter.Write([uint16]32); $iconWriter.Write([uint32]$iconBytes.Length); $iconWriter.Write([uint32]22)
-$iconWriter.Write($iconBytes); $iconWriter.Dispose(); $iconStream.Dispose(); $iconPen.Dispose(); $iconBrush.Dispose(); $iconBackground.Dispose(); $iconGraphics.Dispose(); $iconBitmap.Dispose()
-Write-Output 'Generated LDFCL PNG and ICO.'
+$iconSource = [System.Drawing.Bitmap]::new((Resolve-Path -LiteralPath $SourcePath).Path)
+$iconSizes = @(16, 24, 32, 48, 64, 128, 256)
+$iconFrames = [System.Collections.Generic.List[byte[]]]::new()
+$iconPngPath = Join-Path $PSScriptRoot '../public/icon.png'
+$iconIcoPath = Join-Path $PSScriptRoot 'icon.ico'
+
+try {
+  foreach ($iconSize in $iconSizes) {
+    $iconBitmap = [System.Drawing.Bitmap]::new(
+      $iconSize,
+      $iconSize,
+      [System.Drawing.Imaging.PixelFormat]::Format32bppArgb
+    )
+    $iconStream = [System.IO.MemoryStream]::new()
+    try {
+      for ($iconY = 0; $iconY -lt $iconSize; $iconY++) {
+        $iconSourceY = [int][Math]::Floor(($iconY + 0.5) * $iconSource.Height / $iconSize)
+        for ($iconX = 0; $iconX -lt $iconSize; $iconX++) {
+          $iconSourceX = [int][Math]::Floor(($iconX + 0.5) * $iconSource.Width / $iconSize)
+          $iconBitmap.SetPixel($iconX, $iconY, $iconSource.GetPixel($iconSourceX, $iconSourceY))
+        }
+      }
+      $iconBitmap.Save($iconStream, [System.Drawing.Imaging.ImageFormat]::Png)
+      $iconBytes = $iconStream.ToArray()
+      $iconFrames.Add($iconBytes)
+      if ($iconSize -eq 256) {
+        [System.IO.File]::WriteAllBytes($iconPngPath, $iconBytes)
+      }
+    } finally {
+      $iconStream.Dispose()
+      $iconBitmap.Dispose()
+    }
+  }
+
+  $iconFile = [System.IO.File]::Create($iconIcoPath)
+  $iconWriter = [System.IO.BinaryWriter]::new($iconFile)
+  try {
+    $iconWriter.Write([uint16]0)
+    $iconWriter.Write([uint16]1)
+    $iconWriter.Write([uint16]$iconSizes.Count)
+    $iconOffset = 6 + 16 * $iconSizes.Count
+    for ($iconIndex = 0; $iconIndex -lt $iconSizes.Count; $iconIndex++) {
+      $iconDimension = if ($iconSizes[$iconIndex] -eq 256) { 0 } else { $iconSizes[$iconIndex] }
+      $iconWriter.Write([byte]$iconDimension)
+      $iconWriter.Write([byte]$iconDimension)
+      $iconWriter.Write([byte]0)
+      $iconWriter.Write([byte]0)
+      $iconWriter.Write([uint16]1)
+      $iconWriter.Write([uint16]32)
+      $iconWriter.Write([uint32]$iconFrames[$iconIndex].Length)
+      $iconWriter.Write([uint32]$iconOffset)
+      $iconOffset += $iconFrames[$iconIndex].Length
+    }
+    foreach ($iconFrame in $iconFrames) {
+      $iconWriter.Write([byte[]]$iconFrame)
+    }
+  } finally {
+    $iconWriter.Dispose()
+  }
+} finally {
+  $iconSource.Dispose()
+}
+
+Write-Output 'Generated user-selected transparent PNG and 7-size ICO with nearest-neighbor sampling.'

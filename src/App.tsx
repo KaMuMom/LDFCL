@@ -49,7 +49,7 @@ import Diagnostics from "./components/Diagnostics";
 import { GAME_PRESETS, gamePreset } from "../shared/game-presets";
 import { GlassSurface } from "./ui/Glass";
 import { LAUNCHER_VERSION } from "../shared/launcher";
-import { taskProgressPercent } from "../shared/task-progress";
+import DownloadTasks from "./components/DownloadTasks";
 declare global {
   interface Window {
     launcher?: LauncherAPI;
@@ -131,7 +131,11 @@ export default function App() {
     const request = ++refreshRequest.current;
     try {
       const nextState = await call<State>("state");
-      if (request === refreshRequest.current) setState(nextState);
+      if (request === refreshRequest.current) {
+        setState(nextState);
+        if (nextState.runningInstanceIds)
+          setRunning(nextState.runningInstanceIds);
+      }
     } catch (e) {
       if (request === refreshRequest.current) notify(errorMessage(e));
     }
@@ -229,8 +233,14 @@ export default function App() {
         instanceId: instance.id,
         accountId: account.id,
       });
-      setRunning((old) => [...new Set([...old, instance.id])]);
-      notify(`Minecraft 已启动 · PID ${r.pid}`);
+      setRunning((old) =>
+        r.running === false
+          ? old.filter((id) => id !== instance.id)
+          : [...new Set([...old, instance.id])],
+      );
+      notify(
+        `${r.running === false ? "Minecraft 进程已结束" : `Minecraft 已启动 · PID ${r.pid}`}${r.warnings?.length ? ` · ${r.warnings.join(" ")}` : ""}`,
+      );
       void refresh();
     });
   const select = async (p: any) => {
@@ -238,8 +248,17 @@ export default function App() {
     await refresh();
   };
   const list = Object.values(tasks);
-  const activeTasks = list.filter(
-    (t) => t.status === "running" || t.status === "downloading",
+  const parentTaskIds = new Set(
+    list
+      .filter((task) => task.download?.kind === "plan")
+      .map((task) => task.id),
+  );
+  const rootTasks = list.filter(
+    (task) =>
+      !task.download?.planId || !parentTaskIds.has(task.download.planId),
+  );
+  const activeTasks = rootTasks.filter((task) =>
+    ["running", "downloading", "paused"].includes(task.status),
   );
   return (
     <div className="app-shell">
@@ -251,7 +270,7 @@ export default function App() {
       <GlassSurface as="aside" className="sidebar" radius={28}>
         <div className="brand">
           <div className="brand-mark">
-            <Box size={25} strokeWidth={1.8} />
+            <img src="./icon.png" alt="LDFCL" width={43} height={43} draggable={false} />
           </div>
         </div>
         <nav>
@@ -597,118 +616,46 @@ export default function App() {
               />
               <div className="section-title">
                 <h3>
-                  下载任务 <span>{list.length}</span>
+                  下载任务 <span>{rootTasks.length}</span>
                 </h3>
                 <button
                   className="btn subtle"
                   onClick={() =>
-                    setTasks((old) =>
-                      Object.fromEntries(
-                        Object.entries(old).filter(([, t]) =>
-                          ["running", "downloading", "paused"].includes(
-                            t.status,
-                          ),
+                    setTasks((old) => {
+                      const activePlans = new Set(
+                        Object.values(old)
+                          .filter(
+                            (task) =>
+                              task.download?.kind === "plan" &&
+                              ["running", "downloading", "paused"].includes(
+                                task.status,
+                              ),
+                          )
+                          .map((task) => task.id),
+                      );
+                      return Object.fromEntries(
+                        Object.entries(old).filter(
+                          ([, task]) =>
+                            ["running", "downloading", "paused"].includes(
+                              task.status,
+                            ) ||
+                            (!!task.download?.planId &&
+                              activePlans.has(task.download.planId)),
                         ),
-                      ),
-                    )
+                      );
+                    })
                   }
                 >
                   <Trash2 size={15} />
                   清除已完成
                 </button>
               </div>
-              <div className="task-list">
-                {!list.length ? (
-                  <Empty
-                    icon={Download}
-                    title="这里暂时很安静"
-                    text="安装游戏或下载社区内容后，可以在这里查看进度。"
-                  />
-                ) : (
-                  [...list].reverse().map((t) => (
-                    <GlassSurface as="div" className="task-row" key={t.id}>
-                      <span
-                        className={`quick-icon ${t.status === "error" ? "peach" : "mint"}`}
-                      >
-                        {t.status === "completed" ? (
-                          <Check size={21} />
-                        ) : t.status === "error" ? (
-                          <AlertTriangle size={21} />
-                        ) : (
-                          <Download size={21} />
-                        )}
-                      </span>
-                      <div>
-                        <strong>{t.title}</strong>
-                        <p>
-                          {t.detail ||
-                            {
-                              completed: "已完成",
-                              error: "下载失败",
-                              running: "正在下载",
-                              downloading: "正在下载",
-                              paused: "已暂停",
-                              cancelled: "已取消",
-                            }[t.status] ||
-                            t.status}
-                        </p>
-                        <div className="progress">
-                          <i
-                            style={{
-                              width: `${taskProgressPercent(t)}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                      <span>{taskProgressPercent(t)}%</span>
-                      {t.controllable && (
-                        <div className="button-group">
-                          <select
-                            aria-label={`${t.title} 下载源`}
-                            value={
-                              t.source ||
-                              state.settings.downloadSource ||
-                              "official"
-                            }
-                            onChange={(event) =>
-                              void call("download:source", {
-                                id: t.id,
-                                source: event.target.value,
-                              }).catch((error) => notify(errorMessage(error)))
-                            }
-                          >
-                            <option value="official">官方源</option>
-                            <option value="bmclapi">BMCLAPI</option>
-                          </select>
-                          <button
-                            className="btn subtle"
-                            onClick={() =>
-                              void call("download:control", {
-                                id: t.id,
-                                action:
-                                  t.status === "paused" ? "resume" : "pause",
-                              }).catch((error) => notify(errorMessage(error)))
-                            }
-                          >
-                            {t.status === "paused" ? "继续" : "暂停"}
-                          </button>
-                          <button
-                            className="btn subtle"
-                            onClick={() =>
-                              void call("download:control", {
-                                id: t.id,
-                                action: "cancel",
-                              }).catch((error) => notify(errorMessage(error)))
-                            }
-                          >
-                            取消
-                          </button>
-                        </div>
-                      )}
-                    </GlassSurface>
-                  ))
-                )}
-              </div>
+              <DownloadTasks
+                tasks={list}
+                call={call}
+                notify={notify}
+                source={state.settings.downloadSource}
+              />
             </>
           )}
           {page === "settings" && (
@@ -1308,14 +1255,19 @@ function LauncherSettings({
       await refresh();
       if (method === "game-directory:remove") {
         notify("已移除目录登记，游戏文件保留在原处");
+      } else if (method === "game-directory:relocate") {
+        notify("已更新游戏目录位置，原有实例和选择保留");
+      } else if (method === "game-directory:create-default") {
+        notify("已创建程序旁的默认游戏目录，原来移走的文件未作改动");
       } else {
         const warnings = result.warnings || [];
         notify(
-          `游戏目录已就绪 · 新发现 ${result.discovered || 0} 个版本${warnings.length ? ` · ${warnings[0]}${warnings.length > 1 ? `（共 ${warnings.length} 条提示）` : ""}` : ""}`,
+          `游戏目录已${method === "game-directory:scan" ? "扫描" : "切换"} · 新发现 ${result.discovered || 0} 个版本${warnings.length ? ` · 有 ${warnings.length} 条兼容提示，可展开查看` : ""}`,
         );
       }
     } catch (e) {
       notify(errorMessage(e));
+      await refresh();
     } finally {
       setDirectoryBusy(false);
     }
@@ -1443,6 +1395,32 @@ function LauncherSettings({
               {state.system.gameDirectoryError}
             </div>
           )}
+          {!!state.system.gameDirectoryWarnings?.length && (
+            <details
+              className="directory-notice"
+              key={state.selectedGameDirectoryId}
+            >
+              <summary>
+                <Info size={17} aria-hidden="true" />
+                <span>
+                  旧实例兼容提示 · {state.system.gameDirectoryWarnings.length} 项
+                </span>
+                <span className="directory-notice-toggle">
+                  查看详情 <ChevronRight size={15} aria-hidden="true" />
+                </span>
+              </summary>
+              <div className="directory-notice-content">
+                <p>
+                  以下实例还需要确认版本或目录信息。原有文件已保留，请完成确认后再使用这些实例。
+                </p>
+                <ul>
+                  {state.system.gameDirectoryWarnings.map((warning, index) => (
+                    <li key={index}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
+            </details>
+          )}
           <div className="directory-list">
             {state.gameDirectories.map((directory) => {
               const selected = directory.id === state.selectedGameDirectoryId;
@@ -1459,6 +1437,9 @@ function LauncherSettings({
                     <div className="directory-label">
                       <strong>{directory.name}</strong>
                       {selected && <span className="badge">当前使用</span>}
+                      {directory.available === false && (
+                        <span className="badge">目录不可用</span>
+                      )}
                       {directory.isDefault && (
                         <span className="badge">程序旁默认</span>
                       )}
@@ -1469,11 +1450,18 @@ function LauncherSettings({
                     <p className="break-word" title={directory.path}>
                       {directory.path}
                     </p>
+                    {directory.available === false && (
+                      <p className="directory-error" role="status">
+                        {directory.unavailableReason}
+                      </p>
+                    )}
                   </div>
                   <div className="directory-actions">
                     <button
                       className="btn subtle"
-                      disabled={directoryBusy || busy}
+                      disabled={
+                        directoryBusy || busy || directory.available === false
+                      }
                       onClick={() =>
                         void call("game-directory:open", {
                           id: directory.id,
@@ -1486,7 +1474,9 @@ function LauncherSettings({
                     {!selected && (
                       <button
                         className="btn subtle"
-                        disabled={directoryBusy || busy}
+                        disabled={
+                          directoryBusy || busy || directory.available === false
+                        }
                         onClick={() =>
                           void directoryAction("game-directory:select", {
                             id: directory.id,
@@ -1495,6 +1485,32 @@ function LauncherSettings({
                       >
                         <Check size={15} />
                         使用目录
+                      </button>
+                    )}
+                    {!directory.isDefault && (
+                      <button
+                        className="btn subtle"
+                        disabled={directoryBusy || busy}
+                        onClick={() =>
+                          void directoryAction("game-directory:relocate", {
+                            id: directory.id,
+                          })
+                        }
+                      >
+                        <FolderOpen size={15} />
+                        重新定位
+                      </button>
+                    )}
+                    {directory.isDefault && directory.available === false && (
+                      <button
+                        className="btn subtle"
+                        disabled={directoryBusy || busy}
+                        onClick={() =>
+                          void directoryAction("game-directory:create-default")
+                        }
+                      >
+                        <Plus size={15} />
+                        创建默认目录
                       </button>
                     )}
                     {!directory.isDefault && (

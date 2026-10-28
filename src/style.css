@@ -182,9 +182,16 @@ a {
   border-radius: inherit;
   overflow: hidden;
   pointer-events: none;
-  contain: layout;
+  contain: layout paint;
+  isolation: isolate;
+  clip-path: inset(0 round var(--glass-radius, 24px));
 }
-.glass-backdrop > * {
+/* The upstream pill demo adds sibling shadow/highlight layers. Panel borders
+   are drawn below; keep only its refracting renderer inside this paint root. */
+.glass-backdrop > :not(.liquid-renderer) {
+  display: none !important;
+}
+.glass-backdrop > .liquid-renderer {
   position: absolute !important;
   inset: 0 !important;
   width: 100% !important;
@@ -303,12 +310,13 @@ a {
   place-items: center;
   width: 43px;
   height: 43px;
-  border-radius: 16px;
-  color: white;
-  background: linear-gradient(145deg, #6996fa, #3569e8 65%, #5a67de);
-  box-shadow:
-    inset 0 1px 0 #ffffff80,
-    0 5px 14px #3569e833;
+}
+.brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
 }
 
 .sidebar nav {
@@ -1405,6 +1413,57 @@ dialog.glass-surface .glass-backdrop::after {
 .directory-error {
   color: #b36c4d;
   background: #fff4e7c9;
+}
+.directory-notice {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--accent-soft);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.75;
+}
+.directory-notice summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+.directory-notice summary::-webkit-details-marker {
+  display: none;
+}
+.directory-notice summary > svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.directory-notice-toggle {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.directory-notice[open] .directory-notice-toggle svg {
+  transform: rotate(90deg);
+}
+.directory-notice-content {
+  padding: 0 14px 14px 40px;
+  overflow-wrap: anywhere;
+}
+.directory-notice-content p {
+  margin: 0 0 10px;
+}
+.directory-notice-content ul {
+  margin: 0;
+  padding-left: 18px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.directory-notice-content li + li {
+  margin-top: 7px;
 }
 .memory-visual {
   margin: 23px 0;

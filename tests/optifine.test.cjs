@@ -10,6 +10,7 @@ const compiled =
 const optifine = require(path.join(compiled, "core/services/optifine.js"));
 const java = require(path.join(compiled, "core/services/java.js"));
 const { GameService } = require(path.join(compiled, "core/services/game.js"));
+const { DownloadManager } = require(path.join(compiled, "core/services/downloads.js"));
 const { scanGameDirectory } = require(
   path.join(compiled, "core/game-directories.js"),
 );
@@ -370,8 +371,8 @@ test("GameService OptiFine staging keeps native profiles intact and publishes an
     return { id, loaderVersion: "HD_U_G5" };
   });
   const service = new GameService(root, () => {}, { minecraftRoot: gameRoot });
-  service.downloads.download = async (_url, target) =>
-    write(target, "verified vanilla client");
+  t.mock.method(DownloadManager.prototype, "download", async (_url, target) =>
+    write(target, "verified vanilla client"));
   service.downloads.downloadMany = async () => {};
   const instance = await service.install({
     version: mc,
@@ -438,7 +439,7 @@ test("failed OptiFine installations remove only their newly allocated instance a
     throw new Error("controlled patch failure");
   });
   const service = new GameService(root, () => {}, { minecraftRoot: gameRoot });
-  service.downloads.download = async (_url, target) => write(target, "client");
+  t.mock.method(DownloadManager.prototype, "download", async (_url, target) => write(target, "client"));
   await assert.rejects(
     service.install({
       version: mc,

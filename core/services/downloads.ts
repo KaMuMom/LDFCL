@@ -4,6 +4,13 @@ import path from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { LAUNCHER_USER_AGENT } from "../../shared/launcher";
+import type {
+  DownloadContext,
+  DownloadFileProgress,
+  DownloadPlanStage,
+  DownloadTaskProgress,
+  Task,
+} from "../../shared/types";
 import {
   downloadUrls,
   getDownloadSource,
@@ -19,7 +26,11 @@ import {
   destinationKey,
   transferQueue,
   withDestination,
+  registerDownloadFiles,
+  finishDownloadFiles,
 } from "./download-queue";
+export { getDownloadTaskFiles } from "./download-queue";
+export type { DownloadContext } from "../../shared/types";
 
 export interface DownloadItem {
   url: string;
@@ -31,9 +42,335 @@ export interface DownloadItem {
   maxBytes?: number;
   requireHttps?: boolean;
   source?: DownloadSource;
+  /** Human-readable filename when the destination is an internal cache hash. */
+  name?: string;
 }
 export type Emit = (event: any) => void;
-type Meter = (received: number, total: number) => void;
+type Meter = (
+  received: number,
+  total: number,
+  phase?: "downloading" | "verifying",
+) => void;
+const plans = new Map<string, DownloadPlan>();
+function emitTask(emit: Emit, task: Task) {
+  const plan = task.download?.planId
+    ? plans.get(task.download.planId)
+    : undefined;
+  if (
+    task.download?.planFileId === undefined ||
+    (plan && !plan.groupsFile(task.download))
+  )
+    emit({ type: "task", task });
+  plan?.observe(task);
+}
+export interface DownloadPlanOptions {
+  title: string;
+  context?: DownloadContext;
+  stages: Array<{ id: string; title: string }>;
+}
+/** Stages are declared before metadata is resolved; never imply that an unknown
+ * asset/Java/loader list is already downloaded or invent an overall percentage. */
+export class DownloadPlan {
+  readonly id = randomUUID();
+  private stages: DownloadPlanStage[];
+  private batches = new Map<string, Task>();
+  private status = "running";
+  private detail?: string;
+  private stageFiles = new Map<string, FileTracker>();
+  private lastReport = 0;
+  private reportTimer?: ReturnType<typeof setTimeout>;
+  readonly control = new TaskControl(() => this.report());
+  constructor(
+    private emit: Emit,
+    private options: DownloadPlanOptions,
+  ) {
+    if (
+      !options.stages.length ||
+      new Set(options.stages.map((stage) => stage.id)).size !==
+        options.stages.length
+    )
+      throw new Error("下载阶段不能为空或重复");
+    this.stages = options.stages.map((stage) => ({
+      ...stage,
+      status: "pending",
+    }));
+    plans.set(this.id, this);
+    activeTasks.set(this.id, this.control);
+    this.report();
+  }
+  context(stageId: string, planFileId?: string): DownloadContext {
+    this.stage(stageId);
+    return { ...this.options.context, planId: this.id, stageId, planFileId };
+  }
+  groupsFile(context?: DownloadContext): boolean {
+    return (
+      !!context?.stageId &&
+      context.planFileId !== undefined &&
+      this.stageFiles.has(context.stageId)
+    );
+  }
+  setContext(context: DownloadContext) {
+    this.options.context = { ...this.options.context, ...context };
+    this.report();
+  }
+  async ready(): Promise<void> {
+    await this.control.ready();
+  }
+  private stage(id: string) {
+    const stage = this.stages.find((item) => item.id === id);
+    if (!stage) throw new Error("下载阶段不存在");
+    return stage;
+  }
+  startStage(id: string) {
+    if (this.control.cancelled) throw new DownloadCancelledError();
+    this.stage(id).status = "resolving";
+    this.report();
+  }
+  completeStage(id: string) {
+    if (this.control.cancelled) throw new DownloadCancelledError();
+    this.stage(id).status = "completed";
+    const tracker = this.stageFiles.get(id);
+    if (tracker) {
+      for (let index = 0; index < tracker.files.length; index++)
+        tracker.update(index, {
+          status: "completed",
+          receivedBytes:
+            tracker.files[index].totalBytes ??
+            tracker.files[index].receivedBytes,
+        });
+      this.stage(id).completedFiles = tracker.files.length;
+    }
+    this.report();
+  }
+  setStageFiles(id: string, files: Array<{ name: string; size?: number }>) {
+    const stage = this.stage(id);
+    const tracker = new FileTracker(
+      files.map((file) => ({
+        path: file.name,
+        name: file.name,
+        size: file.size,
+        url: "https://unused.invalid/",
+      })),
+    );
+    this.stageFiles.set(id, tracker);
+    stage.fileListId = `${this.id}:${id}`;
+    stage.totalFiles = files.length;
+    stage.completedFiles = 0;
+    registerDownloadFiles(stage.fileListId, tracker.files);
+    this.report();
+  }
+  completeFile(stageId: string, fileId: string) {
+    const tracker = this.stageFiles.get(stageId);
+    const index = Number(fileId);
+    if (!tracker || !Number.isSafeInteger(index) || !tracker.files[index])
+      return;
+    tracker.update(index, {
+      status: "completed",
+      receivedBytes:
+        tracker.files[index].totalBytes ?? tracker.files[index].receivedBytes,
+    });
+    this.stage(stageId).completedFiles = tracker.summary().completedFiles;
+    this.report(false);
+  }
+  observe(task: Task) {
+    if (this.status !== "running") return;
+    const stage = this.stages.find(
+      (item) => item.id === task.download?.stageId,
+    );
+    if (!stage) return;
+    const tracker = this.stageFiles.get(stage.id);
+    if (tracker) {
+      const index = Number(task.download?.planFileId);
+      if (
+        task.download?.planFileId !== undefined &&
+        Number.isSafeInteger(index) &&
+        tracker.files[index]
+      ) {
+        const status =
+          task.status === "completed"
+            ? "completed"
+            : task.status === "failed" || task.status === "error"
+              ? "failed"
+              : task.status === "cancelled"
+                ? "cancelled"
+                : "downloading";
+        tracker.update(index, {
+          status,
+          receivedBytes: task.download?.receivedBytes || 0,
+          ...(task.download?.totalBytes !== undefined
+            ? { totalBytes: task.download.totalBytes }
+            : {}),
+        });
+      }
+      stage.completedFiles = tracker.summary().completedFiles;
+    } else {
+      this.batches.set(task.id, task);
+      const children = [...this.batches.values()].filter(
+        (item) => item.download?.stageId === stage.id,
+      );
+      stage.totalFiles = children.reduce(
+        (sum, item) => sum + (item.download?.totalFiles || 0),
+        0,
+      );
+      stage.completedFiles = children.reduce(
+        (sum, item) => sum + (item.download?.completedFiles || 0),
+        0,
+      );
+    }
+    if (stage.status !== "completed")
+      stage.status =
+        task.status === "failed" || task.status === "error"
+          ? "error"
+          : task.status === "cancelled"
+            ? "cancelled"
+            : "running";
+    this.report(false);
+  }
+  complete() {
+    if (this.control.cancelled) throw new DownloadCancelledError();
+    this.status = "completed";
+    for (const stage of this.stages) {
+      stage.status = "completed";
+      if (stage.fileListId) finishDownloadFiles(stage.fileListId);
+    }
+    this.report();
+    activeTasks.delete(this.id);
+    plans.delete(this.id);
+  }
+  fail(error: unknown) {
+    this.status =
+      error instanceof DownloadCancelledError ? "cancelled" : "error";
+    this.detail = String(error);
+    for (const stage of this.stages)
+      if (["running", "resolving"].includes(stage.status))
+        stage.status = this.status === "cancelled" ? "cancelled" : "error";
+    if (!this.control.cancelled) this.control.action("cancel");
+    this.report();
+    for (const stage of this.stages)
+      if (stage.fileListId) finishDownloadFiles(stage.fileListId);
+    activeTasks.delete(this.id);
+    plans.delete(this.id);
+  }
+  private report(force = true) {
+    if (!force && Date.now() - this.lastReport < 200) {
+      this.reportTimer ??= setTimeout(
+        () => {
+          this.reportTimer = undefined;
+          this.report();
+        },
+        200 - (Date.now() - this.lastReport),
+      );
+      return;
+    }
+    clearTimeout(this.reportTimer);
+    this.reportTimer = undefined;
+    this.lastReport = Date.now();
+    const status =
+      this.status === "running"
+        ? this.control.cancelled
+          ? "cancelled"
+          : this.control.paused
+            ? "paused"
+            : "running"
+        : this.status;
+    const summaries = [...this.stageFiles.values()]
+      .map((tracker) => tracker.summary())
+      .concat([...this.batches.values()].map((task) => task.download!));
+    this.emit({
+      type: "task",
+      task: {
+        id: this.id,
+        title: this.options.title,
+        status,
+        progress: this.status === "completed" ? 1 : 0,
+        detail: this.detail,
+        source: this.control.source,
+        controllable: this.status === "running" && !this.control.cancelled,
+        download: {
+          ...this.options.context,
+          kind: "plan",
+          progressMode: "indeterminate",
+          stages: this.stages.map((stage) => ({ ...stage })),
+          activeFiles: summaries
+            .flatMap((summary) => summary.activeFiles || [])
+            .slice(0, 32),
+          receivedBytes: summaries.reduce(
+            (sum, summary) => sum + (summary.receivedBytes || 0),
+            0,
+          ),
+          totalFiles: this.stages.reduce(
+            (sum, stage) => sum + (stage.totalFiles || 0),
+            0,
+          ),
+          completedFiles: this.stages.reduce(
+            (sum, stage) => sum + (stage.completedFiles || 0),
+            0,
+          ),
+        },
+      },
+    });
+  }
+}
+function fileRecord(item: DownloadItem, index: number): DownloadFileProgress {
+  return {
+    id: String(index),
+    name: path
+      .basename(item.name || item.path)
+      .replace(/[\u0000-\u001f\u007f]/g, "")
+      .slice(0, 512),
+    status: "queued",
+    receivedBytes: 0,
+    totalBytes: item.size,
+  };
+}
+class FileTracker {
+  readonly files: DownloadFileProgress[];
+  private active = new Map<string, DownloadFileProgress>();
+  private completed = 0;
+  private received = 0;
+  private total = 0;
+  private unknown = 0;
+  phase: DownloadTaskProgress["phase"] = "queued";
+  constructor(
+    items: DownloadItem[],
+    private context: DownloadContext = {},
+  ) {
+    this.files = items.map(fileRecord);
+    for (const file of this.files) {
+      if (file.totalBytes === undefined) this.unknown++;
+      else this.total += file.totalBytes;
+    }
+  }
+  update(index: number, patch: Partial<DownloadFileProgress>) {
+    const file = this.files[index];
+    this.received -= file.receivedBytes;
+    this.total -= file.totalBytes ?? 0;
+    if (file.totalBytes === undefined) this.unknown--;
+    if (file.status === "completed") this.completed--;
+    Object.assign(file, patch);
+    this.received += file.receivedBytes;
+    this.total += file.totalBytes ?? 0;
+    if (file.totalBytes === undefined) this.unknown++;
+    if (file.status === "completed") this.completed++;
+    if (file.status === "downloading") this.active.set(file.id, file);
+    else this.active.delete(file.id);
+  }
+  summary(): DownloadTaskProgress {
+    return {
+      ...this.context,
+      kind: "files",
+      phase: this.phase,
+      progressMode: this.unknown ? "files" : "bytes",
+      totalFiles: this.files.length,
+      completedFiles: this.completed,
+      receivedBytes: this.received,
+      ...(!this.unknown ? { totalBytes: this.total } : {}),
+      activeFiles: [...this.active.values()]
+        .slice(0, 32)
+        .map((file) => ({ ...file })),
+    };
+  }
+}
 const algorithms = ["sha1", "sha256", "sha512"] as const;
 export class DownloadCancelledError extends Error {
   constructor() {
@@ -265,6 +602,7 @@ export class DownloadManager {
     public dataDir: string,
     private emit: Emit = () => {},
     concurrency = 8,
+    private defaultContext: DownloadContext = {},
   ) {
     this.concurrency = concurrency;
   }
@@ -275,46 +613,81 @@ export class DownloadManager {
     transferQueue.concurrency = value;
   }
 
+  createPlan(options: DownloadPlanOptions): DownloadPlan {
+    return new DownloadPlan(this.emit, options);
+  }
+  scoped(context: DownloadContext): DownloadManager {
+    return new DownloadManager(this.dataDir, this.emit, this.concurrency, {
+      ...this.defaultContext,
+      ...context,
+    });
+  }
+
   async download(
     url: string,
     dest: string,
     sha1?: string,
     size?: number,
     label?: string,
+    context?: DownloadContext,
   ): Promise<void> {
-    return this.downloadVerified({ url, path: dest, sha1, size }, label);
+    return this.downloadVerified(
+      { url, path: dest, sha1, size },
+      label,
+      context,
+    );
   }
-  async downloadVerified(item: DownloadItem, label?: string): Promise<void> {
+  async downloadVerified(
+    item: DownloadItem,
+    label?: string,
+    context?: DownloadContext,
+  ): Promise<void> {
+    context = { ...this.defaultContext, ...context };
     const id = randomUUID();
+    const tracker = new FileTracker([item], context);
+    if (!context?.planId || !plans.get(context.planId)?.groupsFile(context))
+      registerDownloadFiles(id, tracker.files);
     let progress = 0;
     let currentDetail: string | undefined;
     let control!: TaskControl;
     const report = (status: string, detail?: string) => {
+      if (control?.cancelled) status = "cancelled";
+      else if (control?.paused && status === "running") status = "paused";
       currentDetail = detail ?? currentDetail;
-      this.emit({
-        type: "task",
-        task: {
-          id,
-          title: label || path.basename(item.path),
-          progress: status === "completed" ? 1 : progress,
-          status,
-          detail: currentDetail,
-          controllable: ["running", "paused"].includes(status),
-          source: control?.source ?? getDownloadSource(),
-        },
+      emitTask(this.emit, {
+        id,
+        title: label || path.basename(item.path),
+        progress: status === "completed" ? 1 : progress,
+        status,
+        detail: currentDetail,
+        controllable: ["running", "paused"].includes(status),
+        source: control?.source ?? getDownloadSource(),
+        download: tracker.summary(),
       });
     };
-    control = new TaskControl(() =>
-      report(
-        control.cancelled ? "cancelled" : control.paused ? "paused" : "running",
-      ),
-    );
+    control =
+      (context?.planId ? plans.get(context.planId)?.control : undefined) ||
+      new TaskControl(() =>
+        report(
+          control.cancelled
+            ? "cancelled"
+            : control.paused
+              ? "paused"
+              : "running",
+        ),
+      );
     activeTasks.set(id, control);
     report("running");
     try {
       await this.transfer(
         item,
-        (received, total) => {
+        (received, total, phase = "downloading") => {
+          tracker.phase = phase;
+          tracker.update(0, {
+            status: "downloading",
+            receivedBytes: received,
+            ...(total > 0 || item.size === 0 ? { totalBytes: total } : {}),
+          });
           progress = total ? Math.min(0.99, received / total) : 0;
           report(
             "running",
@@ -323,8 +696,17 @@ export class DownloadManager {
         },
         control,
       );
+      tracker.update(0, {
+        status: "completed",
+        totalBytes:
+          tracker.files[0].totalBytes ?? tracker.files[0].receivedBytes,
+      });
       report("completed");
     } catch (error) {
+      tracker.update(0, {
+        status:
+          error instanceof DownloadCancelledError ? "cancelled" : "failed",
+      });
       report(
         error instanceof DownloadCancelledError ? "cancelled" : "failed",
         String(error),
@@ -332,6 +714,7 @@ export class DownloadManager {
       throw error;
     } finally {
       activeTasks.delete(id);
+      finishDownloadFiles(id);
     }
   }
   private async transfer(
@@ -342,9 +725,11 @@ export class DownloadManager {
     validate(item);
     await withDestination(item.path, async () => {
       await control.ready();
+      meter(0, item.size ?? 0, "verifying");
       if (await valid(item)) {
         await control.ready();
-        meter(item.size ?? (await fs.stat(item.path)).size, item.size ?? 0);
+        const size = item.size ?? (await fs.stat(item.path)).size;
+        meter(size, size, "verifying");
         return;
       }
       await safeDirectory(path.dirname(item.path), true);
@@ -361,6 +746,7 @@ export class DownloadManager {
         control.attach(controller);
         try {
           await transferQueue.run(async () => {
+            meter(0, item.size ?? 0, "downloading");
             const urls = downloadUrls(item.url, item.source ?? control.source);
             let sourceError: unknown;
             for (const url of urls) {
@@ -607,7 +993,7 @@ export class DownloadManager {
       );
       bodyConsumed = true;
       clearTimeout(timer);
-      meter(received, total);
+      meter(received, total, "verifying");
       if (
         (total && received !== total) ||
         !(await valid({ ...item, path: temporary }))
@@ -652,78 +1038,102 @@ export class DownloadManager {
   async downloadMany(
     items: DownloadItem[],
     label = "下载游戏文件",
+    context?: DownloadContext,
   ): Promise<void> {
+    context = { ...this.defaultContext, ...context };
     const id = randomUUID();
     let control!: TaskControl;
     let unique: DownloadItem[];
     try {
       unique = mergeDestinations(items);
     } catch (error) {
-      this.emit({
-        type: "task",
-        task: {
-          id,
-          title: label,
-          progress: 0,
-          status: "failed",
-          detail: String(error),
-        },
+      emitTask(this.emit, {
+        id,
+        title: label,
+        progress: 0,
+        status: "failed",
+        detail: String(error),
+        download: { ...context, kind: "files", progressMode: "indeterminate" },
       });
       throw error;
     }
-    const sizesKnown = unique.every(
-      (item) => item.size !== undefined && item.size >= 0,
-    );
-    const totalBytes = sizesKnown
-      ? unique.reduce((sum, item) => sum + item.size!, 0)
-      : 0;
-    const received = new Map<DownloadItem, number>();
+    const tracker = new FileTracker(unique, context);
+    registerDownloadFiles(id, tracker.files);
     let next = 0,
       done = 0,
       failed = false,
       failure: unknown;
-    const report = (requestedStatus: string) => {
+    let lastReport = 0;
+    let reportTimer: ReturnType<typeof setTimeout> | undefined;
+    const report = (requestedStatus: string, force = false) => {
       const status = control?.cancelled
         ? "cancelled"
         : control?.paused
           ? "paused"
           : requestedStatus;
-      const fraction = totalBytes
-        ? [...received.values()].reduce((sum, value) => sum + value, 0) /
-          totalBytes
+      if (!force && Date.now() - lastReport < 200) {
+        reportTimer ??= setTimeout(
+          () => {
+            reportTimer = undefined;
+            report(requestedStatus, true);
+          },
+          200 - (Date.now() - lastReport),
+        );
+        return;
+      }
+      clearTimeout(reportTimer);
+      reportTimer = undefined;
+      lastReport = Date.now();
+      const download = tracker.summary();
+      const fraction = download.totalBytes
+        ? (download.receivedBytes || 0) / download.totalBytes
         : done / Math.max(1, unique.length);
-      this.emit({
-        type: "task",
-        task: {
-          id,
-          title: label,
-          progress: status === "completed" ? 1 : Math.min(0.99, fraction),
-          status,
-          detail: failed ? String(failure) : `${done} / ${unique.length}`,
-          controllable: ["running", "paused"].includes(status),
-          source: control?.source ?? getDownloadSource(),
-        },
+      emitTask(this.emit, {
+        id,
+        title: label,
+        progress: status === "completed" ? 1 : Math.min(0.99, fraction),
+        status,
+        detail: failed ? String(failure) : `${done} / ${unique.length}`,
+        controllable: ["running", "paused"].includes(status),
+        source: control?.source ?? getDownloadSource(),
+        download,
       });
     };
-    control = new TaskControl(() => report("running"));
+    control =
+      (context?.planId ? plans.get(context.planId)?.control : undefined) ||
+      new TaskControl(() => report("running", true));
     activeTasks.set(id, control);
-    report("running");
+    report("running", true);
     const worker = async () => {
       while (next < unique.length && !failed) {
-        const item = unique[next++];
+        const index = next++;
+        const item = unique[index];
         try {
           await this.transfer(
             item,
-            (bytes) => {
-              received.set(item, Math.min(bytes, item.size ?? bytes));
+            (bytes, total, phase = "downloading") => {
+              tracker.phase = phase;
+              tracker.update(index, {
+                status: "downloading",
+                receivedBytes: Math.min(bytes, item.size ?? bytes),
+                ...(total > 0 || item.size === 0 ? { totalBytes: total } : {}),
+              });
               report("running");
             },
             control,
           );
-          received.set(item, item.size ?? 0);
+          const file = tracker.files[index];
+          tracker.update(index, {
+            status: "completed",
+            totalBytes: file.totalBytes ?? file.receivedBytes,
+          });
           done++;
           report("running");
         } catch (error) {
+          tracker.update(index, {
+            status:
+              error instanceof DownloadCancelledError ? "cancelled" : "failed",
+          });
           if (!failed) {
             failed = true;
             failure = error;
@@ -737,8 +1147,13 @@ export class DownloadManager {
         worker,
       ),
     );
-    report(failed ? "failed" : "completed");
+    if (control.cancelled)
+      for (let index = 0; index < tracker.files.length; index++)
+        if (tracker.files[index].status === "queued")
+          tracker.update(index, { status: "cancelled" });
+    report(failed ? "failed" : "completed", true);
     activeTasks.delete(id);
+    finishDownloadFiles(id);
     if (failed) throw failure;
   }
 }

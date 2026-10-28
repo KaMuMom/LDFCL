@@ -41,7 +41,13 @@ export function GlassBackdrop({ radius = 24 }: { radius?: number }) {
     };
   }, []);
   return (
-    <div ref={host} className="glass-backdrop" aria-hidden="true" inert>
+    <div
+      ref={host}
+      className="glass-backdrop"
+      style={{ "--glass-radius": `${radius}px` } as CSSProperties}
+      aria-hidden="true"
+      inert
+    >
       <LiquidGlass
         className="liquid-renderer"
         displacementScale={36}

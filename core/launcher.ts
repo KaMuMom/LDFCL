@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { constants } from "node:fs";
 import path from "node:path";
 import { Store, saveGameOptions } from "./store";
 import {
@@ -34,6 +35,7 @@ import {
   setDownloadSource,
   controlDownload,
   setTaskDownloadSource,
+  getDownloadTaskFiles,
 } from "./services/downloads";
 import { ContentPacksService } from "./services/content-packs";
 
@@ -76,6 +78,7 @@ export async function createLauncherCore(
   let directoryChanging = false;
   let versionDeleting = false;
   let gameDirectoryError: string | undefined;
+  let gameDirectoryWarnings: string[] = [];
   const running = new Set<string>();
   const locks = new Set<string>();
   const readQueues = new Map<string, Promise<unknown>>();
@@ -115,20 +118,43 @@ export async function createLauncherCore(
         .then(() => emit({ type: "state" }))
         .catch(() => {});
     }
-    if (event.type === "game" && ["exited", "error"].includes(event.status))
-      running.delete(event.instanceId);
+    if (event.type === "game") {
+      if (["started", "running"].includes(event.status))
+        running.add(event.instanceId);
+      if (["exited", "stopped", "error"].includes(event.status))
+        running.delete(event.instanceId);
+    }
     options.emit?.(event);
   }
   async function state() {
     return {
       instances: store.currentInstances,
-      gameDirectories: store.gameDirectories,
+      gameDirectories: await Promise.all(
+        store.gameDirectories.map(async (directory) => {
+          try {
+            const root = gameDirectoryRoots(directory).minecraftRoot;
+            if (!(await fs.stat(root)).isDirectory())
+              throw Object.assign(Error(), { code: "ENOTDIR" });
+            await fs.access(root, constants.R_OK | constants.W_OK);
+            return { ...directory, available: true };
+          } catch (error: any) {
+            return {
+              ...directory,
+              available: false,
+              unavailableReason: ["ENOENT", "ENOTDIR"].includes(error.code)
+                ? "目录已移动或删除，请重新定位或移除登记。"
+                : "目录无法访问，请检查权限或重新定位。",
+            };
+          }
+        }),
+      ),
       selectedGameDirectoryId: store.selectedGameDirectoryId,
       accounts: await accounts.list(),
       settings: store.settings,
       selectedInstanceId: store.selectedInstanceId,
       selectedAccountId: store.selectedAccountId,
-      system: { ...store.system(), gameDirectoryError },
+      runningInstanceIds: [...running],
+      system: { ...store.system(), gameDirectoryError, gameDirectoryWarnings },
     };
   }
   function bindGameServices() {
@@ -159,6 +185,10 @@ export async function createLauncherCore(
         (instance) => instance.gameDirectoryId === directory.id,
       ),
     );
+  }
+  function setDirectoryWarnings(warnings: string[]) {
+    gameDirectoryError = undefined;
+    gameDirectoryWarnings = warnings;
   }
   async function assertVersionCanDelete(instance: Instance) {
     const root = gameDirectoryRoots(store.currentGameDirectory).minecraftRoot;
@@ -221,11 +251,15 @@ export async function createLauncherCore(
         "请先停止游戏并等待安装、更新或文件操作完成，再切换游戏目录。",
       );
     const snapshot = store.captureGameDirectoryState();
+    const previousDirectoryError = gameDirectoryError;
+    const previousDirectoryWarnings = gameDirectoryWarnings;
     directoryChanging = true;
     try {
       return await operation();
     } catch (error) {
       store.restoreGameDirectoryState(snapshot);
+      gameDirectoryError = previousDirectoryError;
+      gameDirectoryWarnings = previousDirectoryWarnings;
       bindGameServices();
       emit({ type: "state" });
       throw error;
@@ -361,6 +395,8 @@ export async function createLauncherCore(
         throw Error("游戏目录已切换，请重新操作当前版本。");
     }
     switch (method) {
+      case "download:files":
+        return getDownloadTaskFiles(p.id, p.offset, p.limit);
       case "state":
         return state();
       case "versions":
@@ -610,7 +646,7 @@ export async function createLauncherCore(
             );
             store.selectGameDirectory(registered.id);
             await store.save();
-            gameDirectoryError = prepared.warnings.join("\n") || undefined;
+            setDirectoryWarnings([...prepared.warnings, ...scan.warnings]);
             return {
               ...(await state()),
               discovered,
@@ -635,7 +671,7 @@ export async function createLauncherCore(
             );
             store.selectGameDirectory(directory.id);
             await store.save();
-            gameDirectoryError = prepared.warnings.join("\n") || undefined;
+            setDirectoryWarnings([...prepared.warnings, ...scan.warnings]);
             return {
               ...(await state()),
               discovered,
@@ -645,6 +681,64 @@ export async function createLauncherCore(
             bindGameServices();
             emit({ type: "state" });
           }
+        });
+      case "game-directory:relocate":
+        return changeDirectory(async () => {
+          const directory = store.gameDirectories.find((d) => d.id === p.id);
+          if (!directory) throw Error("游戏目录不存在，请重新添加。");
+          if (directory.isDefault)
+            throw Error("默认目录固定在程序旁；可添加其他游戏目录。");
+          let requested = p.path;
+          if (!requested) {
+            const chosen = await host.chooseFiles({
+              title: "重新定位已移动的 Minecraft 游戏目录",
+              properties: ["openDirectory"],
+            });
+            if (chosen.canceled || !chosen.filePaths[0]) return null;
+            requested = chosen.filePaths[0];
+          }
+          const rootPath = await canonicalGameDirectoryPath(requested);
+          const key = gameDirectoryPathKey(rootPath);
+          for (const other of store.gameDirectories) {
+            if (other.id === directory.id) continue;
+            const canonical = await fs
+              .realpath(other.path)
+              .catch(() => other.path);
+            if (gameDirectoryPathKey(canonical) === key)
+              throw Error("该位置已登记为其他游戏目录，请直接使用对应条目。");
+          }
+          // Keep the registry identity and its instance selections; never copy
+          // game data or recreate the old path when a folder was moved.
+          directory.path = rootPath;
+          const prepared = await prepareDirectoryInstances(directory);
+          const scan = await scanGameDirectory(directory);
+          const discovered = await addDiscoveredInstances(
+            directory,
+            scan.instances,
+          );
+          if (directory.id === store.selectedGameDirectoryId) {
+            store.selectGameDirectory(directory.id);
+            setDirectoryWarnings([...prepared.warnings, ...scan.warnings]);
+          }
+          await store.save();
+          bindGameServices();
+          emit({ type: "state" });
+          return {
+            ...(await state()),
+            discovered,
+            warnings: [...prepared.warnings, ...scan.warnings],
+          };
+        });
+      case "game-directory:create-default":
+        return changeDirectory(async () => {
+          const directory = store.gameDirectories.find((d) => d.isDefault);
+          if (!directory) throw Error("默认游戏目录尚未登记。");
+          await fs.mkdir(directory.path, { recursive: true });
+          await canonicalGameDirectoryPath(directory.path);
+          if (directory.id === store.selectedGameDirectoryId)
+            setDirectoryWarnings([]);
+          emit({ type: "state" });
+          return state();
         });
       case "game-directory:scan":
         return changeDirectory(async () => {
@@ -658,7 +752,7 @@ export async function createLauncherCore(
             scan.instances,
           );
           await store.save();
-          gameDirectoryError = prepared.warnings.join("\n") || undefined;
+          setDirectoryWarnings([...prepared.warnings, ...scan.warnings]);
           emit({ type: "state" });
           return {
             ...(await state()),
@@ -675,7 +769,7 @@ export async function createLauncherCore(
               store.currentGameDirectory,
             );
             await store.save();
-            gameDirectoryError = prepared.warnings.join("\n") || undefined;
+            setDirectoryWarnings(prepared.warnings);
             return state();
           } finally {
             bindGameServices();
@@ -687,6 +781,7 @@ export async function createLauncherCore(
           ? store.gameDirectories.find((d) => d.id === p.id)
           : store.currentGameDirectory;
         if (!directory) throw Error("游戏目录不存在。");
+        await canonicalGameDirectoryPath(directory.path);
         const error = await host.openPath(directory.path);
         if (error) throw Error(error);
         return true;
@@ -725,6 +820,7 @@ export async function createLauncherCore(
         return exclusive(
           `install:${p.version}:${p.loader || "vanilla"}`,
           async () => {
+            await canonicalGameDirectoryPath(store.currentGameDirectory.path);
             game.setConcurrency(store.settings.downloadConcurrency);
             const instance = await game.install(p);
             instance.gameDirectoryId = store.selectedGameDirectoryId;
@@ -789,18 +885,36 @@ export async function createLauncherCore(
           const i = store.instance(p.instanceId);
           if (!p.accountId) throw Error("请先添加并选择一个账号");
           const account = await accounts.getForLaunch(p.accountId);
-          await features.scan(i);
+          const warnings: string[] = [];
+          // An optional diagnostic or its report file must not turn a runnable
+          // instance into a failed launch. Required options/snapshots stay strict.
+          try {
+            await features.scan(i);
+          } catch {
+            warnings.push("启动前健康报告未能保存，可稍后重新扫描。");
+          }
           await features.beforeChange(i, "启动前设置");
           await saveGameOptions(
             instanceDirectory(i),
             effectiveGameOptions(store.settings, i),
           );
           const result = await game.launch(i, account, store.settings);
-          running.add(i.id);
           i.lastPlayed = new Date().toISOString();
-          await store.save();
-          if (store.settings.closeOnLaunch) host.minimizeWindow();
-          return result;
+          try {
+            await store.save();
+          } catch {
+            warnings.push(
+              "游戏进程已启动，但启动记录未能保存，请检查启动器配置目录的写入权限。",
+            );
+          }
+          if (store.settings.closeOnLaunch && running.has(i.id)) {
+            try {
+              host.minimizeWindow();
+            } catch {
+              warnings.push("游戏进程已启动，但启动器窗口未能最小化。");
+            }
+          }
+          return { ...result, running: running.has(i.id), warnings };
         });
       case "stop":
         await game.stop(p.id);
@@ -1209,7 +1323,23 @@ export async function createLauncherCore(
     options.dataDir,
     options.legacyUserDataDir,
   );
-  await fs.mkdir(options.defaultGameRoot, { recursive: true }).catch(() => {});
+  const previousConfig = await fs
+    .readFile(path.join(options.dataDir, "launcher.json"), "utf8")
+    .then((text) => JSON.parse(text))
+    .catch(() => undefined);
+  const defaultWasRegistered =
+    Array.isArray(previousConfig?.gameDirectories) &&
+    previousConfig.gameDirectories.some(
+      (directory: any) =>
+        typeof directory?.path === "string" &&
+        path.isAbsolute(directory.path) &&
+        gameDirectoryPathKey(directory.path) ===
+          gameDirectoryPathKey(options.defaultGameRoot),
+    );
+  if (!defaultWasRegistered)
+    await fs
+      .mkdir(options.defaultGameRoot, { recursive: true })
+      .catch(() => {});
   store = new Store(options.dataDir, {
     defaultGameRoot: options.defaultGameRoot,
     legacyDataDir: migration.legacyDataDir,
@@ -1226,11 +1356,13 @@ export async function createLauncherCore(
     const prepared = await prepareDirectoryInstances(
       store.currentGameDirectory,
     );
-    gameDirectoryError = prepared.warnings.join("\n") || undefined;
+    setDirectoryWarnings(prepared.warnings);
   } catch (error: any) {
     gameDirectoryError = `当前游戏目录不可用：${error.message} 请在启动器设置中添加或选择可读写的游戏目录。`;
   }
   const scan = await scanGameDirectory(store.currentGameDirectory);
+  if (!gameDirectoryError)
+    setDirectoryWarnings([...gameDirectoryWarnings, ...scan.warnings]);
   await addDiscoveredInstances(store.currentGameDirectory, scan.instances);
   await store.save({ initialization: true });
   bindGameServices();

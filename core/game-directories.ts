@@ -68,7 +68,9 @@ export async function canonicalGameDirectoryPath(
     if (!(await fs.stat(canonical)).isDirectory())
       throw new Error("not-directory");
   } catch {
-    throw new Error("所选游戏目录不存在或不是文件夹，请先创建该文件夹。");
+    throw new Error(
+      "游戏目录已不存在或不是文件夹，可能已被移动或删除。请重新定位或移除该目录登记。",
+    );
   }
   const probe = path.join(canonical, `.ldfcl-write-probe-${randomUUID()}`);
   let created = false;

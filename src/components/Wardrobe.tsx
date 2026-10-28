@@ -23,6 +23,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import type { Account, SkinLibraryEntry } from "../../shared/types";
+import { defaultSkinTexture } from "../../shared/default-skin";
 import SkinLibrary, { type SkinLibraryDraft } from "./SkinLibrary";
 import { GlassBackdrop, GlassSurface } from "../ui/Glass";
 import "./wardrobe.css";
@@ -41,43 +42,6 @@ type Profile = {
   name?: string;
   manageUrl?: string;
 };
-
-function sampleTexture(): string {
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 64;
-  const context = canvas.getContext("2d")!;
-  context.fillStyle = "#bd9270";
-  context.fillRect(0, 0, 32, 16);
-  context.fillRect(40, 16, 16, 16);
-  context.fillRect(32, 48, 16, 16);
-  context.fillStyle = "#302e30";
-  context.fillRect(0, 0, 32, 7);
-  context.fillRect(0, 7, 8, 9);
-  context.fillRect(24, 7, 8, 9);
-  context.fillRect(8, 8, 8, 2);
-  context.fillStyle = "#f6f6ea";
-  context.fillRect(9, 11, 2, 1);
-  context.fillRect(13, 11, 2, 1);
-  context.fillStyle = "#1d3436";
-  context.fillRect(10, 11, 1, 1);
-  context.fillRect(13, 11, 1, 1);
-  context.fillStyle = "#986c57";
-  context.fillRect(11, 13, 2, 1);
-  context.fillStyle = "#5b8d7c";
-  context.fillRect(16, 16, 24, 16);
-  context.fillRect(40, 16, 16, 6);
-  context.fillRect(32, 48, 16, 6);
-  context.fillStyle = "#e2e2cc";
-  context.fillRect(20, 20, 8, 1);
-  context.fillRect(23, 21, 2, 5);
-  context.fillStyle = "#293e48";
-  context.fillRect(0, 16, 16, 16);
-  context.fillRect(16, 48, 16, 16);
-  context.fillStyle = "#1e292e";
-  context.fillRect(0, 29, 16, 3);
-  context.fillRect(16, 61, 16, 3);
-  return canvas.toDataURL("image/png");
-}
 
 function skinDataUrl(source: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -156,7 +120,7 @@ export default function Wardrobe({
   const dragging = useRef(false);
   const history = useRef<ImageData[]>([]);
   const editorReady = useRef(false);
-  const defaultSkin = useMemo(sampleTexture, []);
+  const defaultSkin = useMemo(defaultSkinTexture, []);
   const account = accounts.find((item) => item.id === accountId);
   const activeSkin =
     profile.skins.find((item) => item.state === "ACTIVE") ?? profile.skins[0];
@@ -425,6 +389,7 @@ export default function Wardrobe({
               <button
                 aria-label={rotating ? "暂停自动旋转" : "开启自动旋转"}
                 title={rotating ? "暂停自动旋转" : "开启自动旋转"}
+                aria-pressed={rotating}
                 onClick={() => setRotating(!rotating)}
               >
                 {rotating ? <Pause size={16} /> : <Play size={16} />}
