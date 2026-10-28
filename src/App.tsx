@@ -50,6 +50,10 @@ import { GAME_PRESETS, gamePreset } from "../shared/game-presets";
 import { GlassSurface } from "./ui/Glass";
 import { LAUNCHER_VERSION } from "../shared/launcher";
 import DownloadTasks from "./components/DownloadTasks";
+import LauncherUpdates, {
+  useLauncherUpdates,
+} from "./components/LauncherUpdates";
+import type { LauncherUpdateState } from "../shared/updates";
 declare global {
   interface Window {
     launcher?: LauncherAPI;
@@ -99,6 +103,7 @@ const errorMessage = (e: any) =>
     "",
   );
 export default function App() {
+  const launcherUpdate = useLauncherUpdates(window.launcher);
   const [state, setState] = useState<State>(empty),
     [page, setPage] = useState("home"),
     [modal, setModal] = useState<null | "account" | "versions">(null),
@@ -270,7 +275,13 @@ export default function App() {
       <GlassSurface as="aside" className="sidebar" radius={28}>
         <div className="brand">
           <div className="brand-mark">
-            <img src="./icon.png" alt="LDFCL" width={43} height={43} draggable={false} />
+            <img
+              src="./icon.png"
+              alt="LDFCL"
+              width={43}
+              height={43}
+              draggable={false}
+            />
           </div>
         </div>
         <nav>
@@ -664,6 +675,7 @@ export default function App() {
               call={call}
               refresh={refresh}
               notify={notify}
+              launcherUpdate={launcherUpdate}
             />
           )}
           {page === "logs" && (
@@ -676,6 +688,14 @@ export default function App() {
           )}
         </main>
       </div>
+      {page !== "settings" && (
+        <LauncherUpdates
+          state={launcherUpdate}
+          call={call}
+          notify={notify}
+          compact
+        />
+      )}
       {toast && (
         <GlassSurface as="div" role="status" className="toast" radius={20}>
           <span>{toast}</span>
@@ -1234,11 +1254,13 @@ function LauncherSettings({
   call,
   refresh,
   notify,
+  launcherUpdate,
 }: {
   state: State;
   call: LauncherAPI["call"];
   refresh: () => Promise<void>;
   notify: (s: string) => void;
+  launcherUpdate?: LauncherUpdateState;
 }) {
   const [s, setS] = useState(state.settings),
     [runtime, setRuntime] = useState<any>(null),
@@ -1302,6 +1324,7 @@ function LauncherSettings({
         </button>
       </PageTitle>
       <div className="settings-grid">
+        <LauncherUpdates state={launcherUpdate} call={call} notify={notify} />
         <GlassSurface className="settings-panel full-span">
           <h3>
             <Settings size={19} />
@@ -1403,7 +1426,8 @@ function LauncherSettings({
               <summary>
                 <Info size={17} aria-hidden="true" />
                 <span>
-                  旧实例兼容提示 · {state.system.gameDirectoryWarnings.length} 项
+                  旧实例兼容提示 · {state.system.gameDirectoryWarnings.length}{" "}
+                  项
                 </span>
                 <span className="directory-notice-toggle">
                   查看详情 <ChevronRight size={15} aria-hidden="true" />

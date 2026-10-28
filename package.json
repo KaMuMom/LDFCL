@@ -1,6 +1,6 @@
 {
   "name": "ldfcl",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "private": true,
   "description": "LDFCL — Liquid Dream Fabric Craft Launcher",
   "author": "LDFCL Contributors",
@@ -24,7 +24,7 @@
     "react-dom": "^19.0.0",
     "skinview-utils": "^0.7.1",
     "skinview3d": "^3.4.2",
-    "@ldfcl/core": "0.6.2"
+    "@ldfcl/core": "0.6.3"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.7",
@@ -67,7 +67,8 @@
       "signAndEditExecutable": true
     },
     "portable": {
-      "requestExecutionLevel": "user"
+      "requestExecutionLevel": "user",
+      "unpackDirName": true
     }
   },
   "workspaces": [

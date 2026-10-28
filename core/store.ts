@@ -10,7 +10,10 @@ import type {
 } from "../shared/types";
 import type { SecretStorage } from "./ports";
 import { LAUNCHER_VERSION } from "../shared/launcher";
-import { validateGameOptions } from "../shared/game-settings";
+import {
+  GAME_OPTION_DEFAULTS,
+  validateGameOptions,
+} from "../shared/game-settings";
 import { validateExtraJvmArguments } from "../shared/jvm-arguments";
 import { GAME_PRESETS } from "../shared/game-presets";
 export const defaults: Settings = {
@@ -709,6 +712,10 @@ export async function saveGameOptions(
     "autoJump",
     "bobView",
   ];
+  // A displayed UI default does not reach Minecraft until options.txt contains
+  // it. Keep an existing in-game choice when launcher overrides are disabled.
+  if (!values.get("lang")?.trim())
+    values.set("lang", String(GAME_OPTION_DEFAULTS.lang));
   for (const [k, v] of Object.entries(settings)) {
     if (allowed.includes(k) && !/[\r\n]/.test(String(v)))
       values.set(k, String(v));

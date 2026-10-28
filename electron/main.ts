@@ -14,6 +14,7 @@ import { randomBytes } from "node:crypto";
 import type { LauncherCore, LauncherCoreOptions } from "@ldfcl/core/launcher";
 import { resolveLauncherDataDirectory } from "@ldfcl/core/application-paths";
 import { resolveDefaultGameDirectoryPath } from "@ldfcl/core/game-directories";
+import { LauncherUpdater, RELEASE_PAGE } from "./updater";
 
 let win: BrowserWindow | null = null;
 let launcher: LauncherCore | undefined;
@@ -21,6 +22,11 @@ let launcherReady: Promise<LauncherCore> | undefined;
 let startupBusy = false;
 let quitting = false;
 let startupDataDirectory = "尚未确定";
+let updater: LauncherUpdater;
+let updaterScheduled = false;
+let updateInstalling = false;
+let activeCoreCalls = 0;
+const activeDownloadTasks = new Set<string>();
 app.setName("LDFCL");
 
 function publicError(error: unknown): string {
@@ -148,6 +154,14 @@ function coreOptions(): LauncherCoreOptions {
       : app.getPath("userData"),
     secretStorage: safeStorage,
     emit(event) {
+      if (event.type === "task") {
+        const task = event.task || event;
+        if (
+          ["running", "downloading", "paused", "queued"].includes(task.status)
+        )
+          activeDownloadTasks.add(task.id);
+        else activeDownloadTasks.delete(task.id);
+      }
       if (win && !win.isDestroyed())
         win.webContents.send("launcher:event", event);
     },
@@ -195,6 +209,13 @@ async function startLauncher() {
     if (process.env.LDFCL_DEV_URL)
       await win!.loadURL(process.env.LDFCL_DEV_URL);
     else await win!.loadFile(path.join(__dirname, "../../dist/index.html"));
+    if (!updaterScheduled) {
+      updaterScheduled = true;
+      const timer = setTimeout(() => {
+        if (!quitting) void updater.check();
+      }, 3500);
+      timer.unref();
+    }
   } catch (error) {
     await showStartupFailure(error);
   } finally {
@@ -205,16 +226,74 @@ async function startLauncher() {
 app
   .whenReady()
   .then(() => {
+    const portableFile = process.env.PORTABLE_EXECUTABLE_FILE;
+    updater = new LauncherUpdater({
+      currentVersion: app.getVersion(),
+      executable:
+        app.isPackaged &&
+        process.platform === "win32" &&
+        process.arch === "x64" &&
+        portableFile &&
+        path.isAbsolute(portableFile) &&
+        path.extname(portableFile).toLowerCase() === ".exe"
+          ? portableFile
+          : undefined,
+      emit(state) {
+        if (win && !win.isDestroyed())
+          win.webContents.send("launcher:event", {
+            type: "launcher-update",
+            state,
+          });
+      },
+      async canInstall() {
+        if (updateInstalling) throw Error("更新正在安装。");
+        if (activeCoreCalls || activeDownloadTasks.size)
+          throw Error("请等待当前操作和下载完成，再重启更新。");
+        const state = await launcher?.state();
+        if (state?.runningInstanceIds?.length)
+          throw Error("请先关闭正在运行的 Minecraft，再重启更新。");
+        if (activeCoreCalls || activeDownloadTasks.size)
+          throw Error("请等待当前操作完成，再重启更新。");
+        updateInstalling = true;
+      },
+      quit() {
+        app.quit();
+      },
+    });
     ipcMain.handle("launcher:call", async (event, method, payload) => {
       if (event.sender !== win?.webContents) throw Error("无效的调用来源");
       try {
+        if (method === "update:state") return updater.state();
+        if (method === "update:check") return updater.check();
+        if (method === "update:download") return updater.download();
+        if (method === "update:open") {
+          await shell.openExternal(RELEASE_PAGE);
+          return true;
+        }
+        if (method === "update:install") {
+          if (updateInstalling || updater.state().status === "installing")
+            throw Error("更新正在安装。");
+          try {
+            return await updater.install();
+          } catch (error) {
+            if (updater.state().status !== "installing")
+              updateInstalling = false;
+            throw error;
+          }
+        }
+        if (updateInstalling) throw Error("正在应用启动器更新，请稍候。");
         if (method === "startup:retry") {
           void startLauncher();
           return true;
         }
         if (!launcherReady) throw Error("启动器正在准备，请稍后重试。");
         const ready = await launcherReady;
-        return await ready.call(method, payload);
+        activeCoreCalls++;
+        try {
+          return await ready.call(method, payload);
+        } finally {
+          activeCoreCalls--;
+        }
       } catch (error: any) {
         throw Error(publicError(error));
       }

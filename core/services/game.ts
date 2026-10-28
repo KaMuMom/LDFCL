@@ -6,7 +6,10 @@ import { spawn, ChildProcess } from "node:child_process";
 import AdmZip from "adm-zip";
 import type { Instance, Account, Settings } from "../../shared/types";
 import { LAUNCHER_VERSION } from "../../shared/launcher";
-import { effectiveGameOptions } from "../../shared/game-settings";
+import {
+  GAME_OPTION_DEFAULTS,
+  effectiveGameOptions,
+} from "../../shared/game-settings";
 import { validateExtraJvmArguments } from "../../shared/jvm-arguments";
 import { CrashDiagnostics } from "./crash-diagnostics";
 import { prepareJavaLaunch } from "./java-launch";
@@ -1351,6 +1354,9 @@ export class GameService {
       const index = line.indexOf(":");
       if (index > 0) values.set(line.slice(0, index), line.slice(index + 1));
     }
+    // Core/CLI callers also launch without the GUI's pre-launch save path.
+    if (!values.get("lang")?.trim())
+      values.set("lang", String(GAME_OPTION_DEFAULTS.lang));
     for (const [key, value] of Object.entries(settings)) {
       if (!/^[a-zA-Z0-9_]+$/.test(key) || /[\r\n]/.test(String(value)))
         throw new Error("游戏设置包含无效字符");

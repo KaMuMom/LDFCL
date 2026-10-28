@@ -57,8 +57,8 @@ export default function GeneralGameSettings({
       )}
       {!enabled && (
         <p className="muted general-game-hint">
-          关闭时保留游戏自己的设置。你仍可在「游戏实例 →
-          游戏预设」为单个版本配置。
+          关闭时保留游戏自己的设置；尚未设置游戏语言时默认简体中文。你仍可在「游戏实例
+          → 游戏预设」为单个版本配置。
         </p>
       )}
     </GlassSurface>

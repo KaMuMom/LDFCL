@@ -232,17 +232,6 @@ export async function prepareInstanceDirectories(
         await plainDirectory(path.join(dataDir, "instances"));
         await assertPlainTree(source);
       }
-      if (!hasSource && instance.importedVersionId) {
-        const id = safeGameVersionId(instance.importedVersionId);
-        await assertInstanceGameDirectory(minecraftRoot, {
-          ...instance,
-          versionDirectory: id,
-        });
-        await readProfile(minecraftRoot, id);
-        instance.versionDirectory = id;
-        result.prepared++;
-        continue;
-      }
       const canonicalSource = hasSource
         ? await fs.realpath(source)
         : path.resolve(source);
@@ -290,6 +279,17 @@ export async function prepareInstanceDirectories(
         result.prepared++;
         continue;
       }
+      if (!hasSource && instance.importedVersionId) {
+        const id = safeGameVersionId(instance.importedVersionId);
+        await assertInstanceGameDirectory(minecraftRoot, {
+          ...instance,
+          versionDirectory: id,
+        });
+        await readProfile(minecraftRoot, id);
+        instance.versionDirectory = id;
+        result.prepared++;
+        continue;
+      }
       let sourceId: string | undefined;
       if (hasSource) {
         try {
@@ -301,10 +301,9 @@ export async function prepareInstanceDirectories(
           );
           sourceId = safeGameVersionId(pointer.version);
         } catch {
-          if (instance.loader !== "vanilla")
-            throw new Error(
-              "版本关联信息待确认，旧实例文件已保留；完成关联后即可使用此实例。",
-            );
+          // Older imported instances may never have written this pointer.
+          // Use their explicit import record below, then validate that exact
+          // profile; never guess a loader installation from the MC version.
         }
       }
       sourceId ||=

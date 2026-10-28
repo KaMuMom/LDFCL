@@ -9,6 +9,7 @@ test-results/
 .minecraft/
 LDFCL-data/
 .ldfcl-migration-*/
+.ldfcl-update/
 accounts.json
 launcher.json
 credential.xml

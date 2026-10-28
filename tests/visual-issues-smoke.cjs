@@ -188,7 +188,8 @@ const { chromium } = require("playwright-core");
         return values;
       };
       return {
-        dataUrl: image.src,
+        dataUrl: canvas.toDataURL("image/png"),
+        sourceUrl: image.src,
         top: region(8, 0, 8, 8),
         bottom: region(16, 0, 8, 8),
         right: region(0, 8, 8, 8),
@@ -198,22 +199,16 @@ const { chromium } = require("playwright-core");
         outerHead: region(32, 0, 32, 16),
       };
     });
-    const hair = [48, 46, 48, 255];
-    const isHair = (pixel) =>
-      pixel.every((value, index) => value === hair[index]);
     for (const face of ["top", "bottom", "right", "front", "left", "back"])
       assert(
         texture[face].every((pixel) => pixel[3] === 255),
         `${face} has a hole`,
       );
-    assert(texture.top.every(isHair), "top hair must cover all eight UV rows");
-    assert(texture.back.every(isHair), "back hair must cover the whole face");
-    for (const face of ["left", "right"])
-      assert.equal(
-        texture[face].filter(isHair).length,
-        60,
-        `${face} hair/ear coverage`,
-      );
+    assert.match(
+      texture.sourceUrl,
+      /\/skins\/steve\.png$/,
+      "default skin is the bundled Steve template",
+    );
     assert(
       texture.outerHead.every((pixel) => pixel[3] === 0),
       "unused outer head layer stays transparent",
@@ -223,7 +218,7 @@ const { chromium } = require("playwright-core");
       Buffer.from(texture.dataUrl.split(",")[1], "base64"),
     );
     checks.push(
-      "real PNG pixels: six opaque head faces, continuous top/back/side hair and transparent outer layer",
+      "bundled official Steve PNG: six opaque head faces and transparent outer layer",
     );
 
     const initialCalls = await page.evaluate(

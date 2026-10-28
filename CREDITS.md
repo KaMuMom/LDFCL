@@ -4,6 +4,8 @@
 
 本版应用图标采用用户提供的像素素材，项目仅转换尺寸与格式；原始图片与图标重建脚本一并保留，素材不作为本项目原创代码声明。
 
+内置默认角色使用 **Mojang / Microsoft** 官方 [Steve 皮肤模板](https://assets.mojang.com/SkinTemplates/steve.png)，原始 64×64 PNG 保存在 `public/skins/steve.png`，采用经典四像素手臂模型，供未登录及外观不可用时离线预览。素材未修改，SHA-256 为 `4c7b0468044bfecacc43d00a3a69335a834b73937688292c20d3988cae58248d`；其版权归 Mojang / Microsoft，不受本项目代码的 MIT 许可覆盖。
+
 0.5.0 按用户指定的 [rdev/liquid-glass-react](https://github.com/rdev/liquid-glass-react) 文档重构 UI，实际使用 npm 运行依赖 **liquid-glass-react@1.1.1**。感谢 **Max Rovensky** 开发并以 MIT 公开这一组件；上游完整版权声明为 **Copyright 2025 MAX ROVENSKY**。文档及许可证阅读固定在 [提交 ac48eab18d1f7f444ae30002d240cae29c863a21](https://github.com/rdev/liquid-glass-react/tree/ac48eab18d1f7f444ae30002d240cae29c863a21)，运行包的精确版本记录于 package-lock.json。
 
 本项目独立编写 GlassBackdrop / GlassSurface 适配层和应用布局，在真实上游玻璃装饰之后保留语义 HTML、可选择正文与原有功能。适配使用 standard 折射模式；范围与旧样式清理见 [UI 重构说明](docs/UI_REFACTOR.md)，完整上游 MIT 文本见 [第三方通知](THIRD_PARTY_NOTICES.md#liquid-glass-react-111--mit)。以下旧版功能和来源记录保留原版本语境。

@@ -1,0 +1,52 @@
+.launcher-update-banner,
+.launcher-update-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.launcher-update-banner {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(650px, calc(100% - 70px));
+  z-index: 70;
+  padding: 16px 20px;
+  border-radius: 20px;
+}
+.launcher-update-copy {
+  min-width: 0;
+  flex: 1;
+}
+.launcher-update-copy p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  opacity: 0.72;
+  overflow-wrap: anywhere;
+}
+.launcher-update-copy progress {
+  width: 100%;
+  height: 7px;
+  margin-top: 10px;
+  accent-color: var(--accent, #4a72c9);
+}
+.launcher-update-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.launcher-update-banner .launcher-update-actions {
+  flex-shrink: 0;
+}
+@media (max-width: 1000px) {
+  .launcher-update-panel {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .launcher-update-actions {
+    justify-content: flex-start;
+  }
+}

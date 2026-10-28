@@ -20,6 +20,10 @@ Version 0.2.2 adds independently implemented game-directory registration, portab
 
 LDFCL is an independent Minecraft Java Edition launcher. Minecraft is a trademark of Mojang/Microsoft; LDFCL is not affiliated with, endorsed by, or distributed by Mojang or Microsoft. Minecraft game files are downloaded from the relevant services when requested and are not part of this project's source license.
 
+## Bundled Steve skin template
+
+`public/skins/steve.png` is the unmodified 64×64 classic Steve skin template downloaded from Mojang's official https://assets.mojang.com/SkinTemplates/steve.png on 2026-10-28. Its SHA-256 is `4c7b0468044bfecacc43d00a3a69335a834b73937688292c20d3988cae58248d`. It supplies an offline default character preview and remains copyrighted by Mojang/Microsoft under the applicable Minecraft terms; it is not licensed under LDFCL's MIT code license and does not grant account or game ownership rights.
+
 ## Visual, protocol and community references
 
 [SuGar0218/TryLiquidGlass-WinUI3](https://github.com/SuGar0218/TryLiquidGlass-WinUI3) was the visual reference requested for the initial interface. Its `main` tree and README were inspected on 2026-10-20; no public license file was found in that inspected tree. LDFCL does not assume MIT or another reuse license for it. LDFCL's Electron/React/CSS implementation is independent; its WinUI controls, shaders, source and image assets were not copied. Version 0.2.1 used a compact Windows 11 layout and Electron's native Mica background where supported; that is a historical UI record. Version 0.5.0 uses the liquid-glass-react dependency described above.

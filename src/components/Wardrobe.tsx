@@ -23,7 +23,10 @@ import {
   ZoomOut,
 } from "lucide-react";
 import type { Account, SkinLibraryEntry } from "../../shared/types";
-import { defaultSkinTexture } from "../../shared/default-skin";
+import {
+  DEFAULT_SKIN_NAME,
+  defaultSkinTexture,
+} from "../../shared/default-skin";
 import SkinLibrary, { type SkinLibraryDraft } from "./SkinLibrary";
 import { GlassBackdrop, GlassSurface } from "../ui/Glass";
 import "./wardrobe.css";
@@ -45,7 +48,10 @@ type Profile = {
 
 function skinDataUrl(source: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    if (!/^(data:image\/png;base64,|https?:\/\/)/.test(source)) {
+    if (
+      source !== defaultSkinTexture() &&
+      !/^(data:image\/png;base64,|https?:\/\/)/.test(source)
+    ) {
       reject(new Error("请先导入有效的皮肤 PNG。"));
       return;
     }
@@ -142,6 +148,7 @@ export default function Wardrobe({
     setLocalCape(null);
     if (!accountId) {
       setProfile({ skins: [], capes: [], editable: false });
+      setVariant("classic");
       setLoading(false);
       return;
     }
@@ -346,7 +353,7 @@ export default function Wardrobe({
           localSkin?.name?.replace(/\.png$/i, "") ||
           (activeSkin
             ? `${account?.name || "我的"} 的皮肤`
-            : "Forest Explorer"),
+            : DEFAULT_SKIN_NAME),
       });
     });
 
@@ -383,7 +390,7 @@ export default function Wardrobe({
           </div>
           <div className="wardrobe-stage-bottom">
             <span className="wardrobe-preview-name">
-              {account?.name ?? "LDFCL Explorer"}
+              {account?.name ?? DEFAULT_SKIN_NAME}
             </span>
             <div className="wardrobe-tools">
               <button
@@ -477,7 +484,7 @@ export default function Wardrobe({
                   {localSkin?.name ??
                     (activeSkin
                       ? `${account?.name ?? ""} 的皮肤`
-                      : "Forest Explorer")}
+                      : DEFAULT_SKIN_NAME)}
                 </strong>
                 <small>
                   {localSkin

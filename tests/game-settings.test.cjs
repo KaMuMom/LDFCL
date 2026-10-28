@@ -9,7 +9,11 @@ const {
   validateGameOptions,
   effectiveGameOptions,
 } = require("../dist-electron/shared/game-settings.js");
-const { Store, validateSettings } = require("@ldfcl/core/store");
+const {
+  Store,
+  validateSettings,
+  saveGameOptions,
+} = require("@ldfcl/core/store");
 const { GameService } = require("@ldfcl/core/services/game");
 
 async function temporary(t) {
@@ -95,6 +99,152 @@ test("general settings persist across Store restart, old installs remain opt-in,
   await store.load();
   assert.deepEqual(store.settings.gameDefaults, {});
   assert.equal(store.settings.downloadConcurrency, 8);
+});
+
+test("saving game options defaults missing language to Chinese while preserving existing and explicit language choices", async (t) => {
+  const dir = await temporary(t);
+  const cases = [
+    { name: "new", existing: undefined, options: {}, expected: "zh_cn" },
+    {
+      name: "missing",
+      existing: "gamma:0.7\n",
+      options: {},
+      expected: "zh_cn",
+    },
+    { name: "blank", existing: "lang:  \n", options: {}, expected: "zh_cn" },
+    {
+      name: "existing",
+      existing: "lang:ja_jp\n",
+      options: {},
+      expected: "ja_jp",
+    },
+    {
+      name: "explicit",
+      existing: "lang:en_us\n",
+      options: { lang: "zh_tw" },
+      expected: "zh_tw",
+    },
+  ];
+  for (const item of cases) {
+    const folder = path.join(dir, item.name);
+    if (item.existing !== undefined) {
+      await fs.mkdir(folder, { recursive: true });
+      await fs.writeFile(
+        path.join(folder, "options.txt"),
+        item.existing + "customModOption:keep\n",
+      );
+    }
+    await saveGameOptions(folder, item.options);
+    const result = await fs.readFile(path.join(folder, "options.txt"), "utf8");
+    assert.equal(result.match(/^lang:(.*)$/m)?.[1], item.expected, item.name);
+    assert.equal((result.match(/^lang:/gm) || []).length, 1, item.name);
+    if (item.existing !== undefined)
+      assert.match(result, /^customModOption:keep$/m);
+  }
+});
+
+test("core launch applies Chinese only as a fallback, then honors general and instance language overrides", async (t) => {
+  const dir = await temporary(t);
+  const root = path.join(dir, ".minecraft");
+  const selected = path.join(root, "versions", "language-test");
+  await fs.mkdir(selected, { recursive: true });
+  await fs.writeFile(
+    path.join(selected, "language-test.json"),
+    JSON.stringify({
+      id: "language-test",
+      mainClass: "net.minecraft.client.main.Main",
+      libraries: [],
+      arguments: { game: ["--gameDir", "${game_directory}"], jvm: [] },
+    }),
+  );
+  await fs.writeFile(path.join(selected, "language-test.jar"), "fixture");
+  const service = new GameService(dir, () => {}, { minecraftRoot: root });
+  service.java.ensure = async () => "fixture-java.exe";
+  let child;
+  t.mock.method(require("node:child_process"), "spawn", () => {
+    child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.pid = 54322;
+    queueMicrotask(() => child.emit("spawn"));
+    return child;
+  });
+  const instance = {
+    id: "language-test",
+    name: "language test",
+    version: "1.21.1",
+    loader: "vanilla",
+    versionDirectory: "language-test",
+    gameSettings: {},
+  };
+  const settings = {
+    downloadConcurrency: 2,
+    memoryMode: "manual",
+    memoryMb: 1024,
+    gameDefaults: {},
+  };
+  const account = {
+    type: "offline",
+    name: "Alex",
+    uuid: "0123456789abcdef0123456789abcdef",
+  };
+  const cases = [
+    {
+      name: "new instance with general settings disabled",
+      existing: undefined,
+      defaults: {},
+      override: {},
+      expected: "zh_cn",
+    },
+    {
+      name: "existing options without language",
+      existing: "gamma:0.7\n",
+      defaults: {},
+      override: {},
+      expected: "zh_cn",
+    },
+    {
+      name: "existing in-game language",
+      existing: "lang:ja_jp\n",
+      defaults: {},
+      override: {},
+      expected: "ja_jp",
+    },
+    {
+      name: "general settings without language",
+      existing: "lang:en_us\n",
+      defaults: { maxFps: 144 },
+      override: {},
+      expected: "en_us",
+    },
+    {
+      name: "explicit general language",
+      existing: "lang:ja_jp\n",
+      defaults: { lang: "en_us" },
+      override: {},
+      expected: "en_us",
+    },
+    {
+      name: "instance language takes priority",
+      existing: "lang:ja_jp\n",
+      defaults: { lang: "en_us" },
+      override: { lang: "zh_tw" },
+      expected: "zh_tw",
+    },
+  ];
+  for (const item of cases) {
+    const file = path.join(selected, "options.txt");
+    if (item.existing === undefined) await fs.rm(file, { force: true });
+    else await fs.writeFile(file, item.existing + "customModOption:keep\n");
+    settings.gameDefaults = item.defaults;
+    instance.gameSettings = item.override;
+    await service.launch(instance, account, settings);
+    child.emit("close", 0);
+    const result = await fs.readFile(file, "utf8");
+    assert.equal(result.match(/^lang:(.*)$/m)?.[1], item.expected, item.name);
+    if (item.existing !== undefined)
+      assert.match(result, /^customModOption:keep$/m);
+  }
 });
 
 test("actual launch preparation writes general and per-instance options to only the chosen version directory", async (t) => {

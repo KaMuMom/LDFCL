@@ -19,7 +19,9 @@ const { scanGameDirectory } = require(
 const { GameService } = require(
   path.join(compiledRoot, "core", "services", "game.js"),
 );
-const { DownloadManager } = require(path.join(compiledRoot, "core", "services", "downloads.js"));
+const { DownloadManager } = require(
+  path.join(compiledRoot, "core", "services", "downloads.js"),
+);
 
 function directory(root, layout = "standard") {
   return { id: "directory", name: "目录", path: root, layout };
@@ -206,6 +208,176 @@ test("new native import uses exact version directory without copying root user d
   assert.equal(item.versionDirectory, "现有版本");
   await assert.rejects(fs.access(path.join(root, "instances")));
 });
+
+for (const loader of ["fabric", "forge", "quilt", "neoforge", "optifine"]) {
+  for (const pointer of ["missing", "malformed"]) {
+    test(`${loader} import automatically recovers a ${pointer} legacy pointer without touching original data`, async (t) => {
+      const root = await temporary(t);
+      const sourceId = `1.21.1-${loader}`;
+      const item = instance({
+        name: "旧整合包",
+        loader,
+        importedVersionId: sourceId,
+      });
+      const native = await profile(root, sourceId, {
+        minecraftVersion: "1.21.1",
+        mainClass: `${loader}.Main`,
+      });
+      await fs.writeFile(path.join(native, `${sourceId}.jar`), "native-client");
+      await fs.writeFile(path.join(native, "options.txt"), "native-settings");
+      const source = await legacy(root, item);
+      if (pointer === "malformed") {
+        await fs.mkdir(path.join(source, ".ldfcl"));
+        await fs.writeFile(
+          path.join(source, ".ldfcl", "launch.json"),
+          "{broken",
+        );
+      }
+      await fs.mkdir(path.join(source, "config"));
+      await fs.writeFile(
+        path.join(source, "config", "user.json"),
+        '{"keep":true}',
+      );
+
+      const result = await prepareInstanceDirectories(directory(root), [item]);
+      assert.deepEqual(result, { prepared: 1, migrated: 1, warnings: [] });
+      assert.equal(item.versionDirectory, "旧整合包");
+      assert.equal(item.importedVersionId, sourceId);
+      const target = instanceGameDirectory(root, item);
+      for (const [file, content] of [
+        [path.join("mods", "example.jar"), "user-mod"],
+        [path.join("saves", "World", "level.dat"), "user-world"],
+        [path.join("config", "user.json"), '{"keep":true}'],
+        ["options.txt", "fullscreen:true\n"],
+      ]) {
+        assert.equal(
+          await fs.readFile(path.join(source, file), "utf8"),
+          content,
+        );
+        assert.equal(
+          await fs.readFile(path.join(target, file), "utf8"),
+          content,
+        );
+      }
+      assert.equal(
+        await fs.readFile(path.join(native, "options.txt"), "utf8"),
+        "native-settings",
+      );
+      assert.equal(
+        await fs.readFile(
+          path.join(target, `${item.versionDirectory}.jar`),
+          "utf8",
+        ),
+        "native-client",
+      );
+      const own = JSON.parse(
+        await fs.readFile(
+          path.join(target, `${item.versionDirectory}.json`),
+          "utf8",
+        ),
+      );
+      assert.equal(own.mainClass, `${loader}.Main`);
+
+      // Simulate a save failure: retry with the old store record, preserving
+      // data written after the successful migration instead of copying again.
+      const previousRecord = { ...item, versionDirectory: undefined };
+      await fs.writeFile(path.join(target, "options.txt"), "newer-settings");
+      const before = (await fs.readdir(path.join(root, "versions"))).sort();
+      assert.deepEqual(
+        await prepareInstanceDirectories(directory(root), [previousRecord]),
+        {
+          prepared: 1,
+          migrated: 0,
+          warnings: [],
+        },
+      );
+      assert.equal(previousRecord.versionDirectory, item.versionDirectory);
+      assert.deepEqual(
+        (await fs.readdir(path.join(root, "versions"))).sort(),
+        before,
+      );
+      assert.equal(
+        await fs.readFile(path.join(target, "options.txt"), "utf8"),
+        "newer-settings",
+      );
+    });
+  }
+}
+
+test("completed migration is recovered before direct import even if the old source was removed", async (t) => {
+  const root = await temporary(t);
+  const original = instance({
+    loader: "fabric",
+    importedVersionId: "fabric-original",
+  });
+  const savedRecord = { ...original };
+  await profile(root, "fabric-original");
+  const source = await legacy(root, original);
+  assert.equal(
+    (await prepareInstanceDirectories(directory(root), [original])).migrated,
+    1,
+  );
+  const target = instanceGameDirectory(root, original);
+  await fs.writeFile(path.join(target, "options.txt"), "latest-settings");
+  await fs.rm(source, { recursive: true });
+  assert.deepEqual(
+    await prepareInstanceDirectories(directory(root), [savedRecord]),
+    {
+      prepared: 1,
+      migrated: 0,
+      warnings: [],
+    },
+  );
+  assert.equal(savedRecord.versionDirectory, original.versionDirectory);
+  assert.equal(
+    await fs.readFile(path.join(target, "options.txt"), "utf8"),
+    "latest-settings",
+  );
+});
+
+for (const problem of [
+  "missing",
+  "invalid-id",
+  "corrupt-profile",
+  "inheritance-cycle",
+]) {
+  test(`automatic import recovery rejects ${problem} provenance without modifying source data`, async (t) => {
+    const root = await temporary(t);
+    const item = instance({
+      loader: "fabric",
+      importedVersionId: problem === "invalid-id" ? "../outside" : "original",
+    });
+    const source = await legacy(root, item);
+    if (problem === "corrupt-profile") {
+      const native = await profile(root, "original");
+      await fs.writeFile(path.join(native, "original.json"), "{broken");
+    } else if (problem === "inheritance-cycle") {
+      await profile(root, "original", { inheritsFrom: "original" });
+    }
+    const result = await prepareInstanceDirectories(directory(root), [item]);
+    assert.equal(result.prepared, 0);
+    assert.equal(result.migrated, 0);
+    assert.equal(result.warnings.length, 1);
+    assert.equal(item.versionDirectory, undefined);
+    assert.equal(
+      await fs.readFile(path.join(source, "mods", "example.jar"), "utf8"),
+      "user-mod",
+    );
+    assert.equal(
+      await fs.readFile(
+        path.join(source, "saves", "World", "level.dat"),
+        "utf8",
+      ),
+      "user-world",
+    );
+    assert.equal(
+      (await fs.readdir(path.join(root, "versions"))).some(
+        (id) => id.startsWith(".ldfcl-migration-") || id === "我的世界",
+      ),
+      false,
+    );
+  });
+}
 
 test("missing loader provenance fails safely, preserving source and leaving record unprepared", async (t) => {
   const root = await temporary(t);
