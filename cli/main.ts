@@ -25,13 +25,8 @@ type Options = {
   bundle?: string;
   name?: string;
   snapshot?: string;
-  prompt?: string;
-  provider?: string;
-  baseUrl?: string;
-  model?: string;
   auto?: boolean;
   apply?: boolean;
-  consent?: boolean;
   command: string[];
 };
 
@@ -65,7 +60,6 @@ LDFCL_DATA_DIR / LDFCL_GAME_ROOT are supported; command options take precedence.
 With --data-dir only, the default game root is <data-dir>/.minecraft.
 Both list commands are read-only; Java discovery executes local Java probes.
 Advanced commands use the same core. Snapshot restore previews unless --apply.
-AI commands are temporarily disabled; only a static desktop preview remains.
 `;
 
 class CliError extends Error {
@@ -99,19 +93,15 @@ function parse(args: string[]): Options {
   };
   const values: Record<
     string,
-    "name" | "snapshot" | "prompt" | "provider" | "baseUrl" | "model"
+    "name" | "snapshot"
   > = {
     "--name": "name",
     "--snapshot": "snapshot",
-    "--prompt": "prompt",
-    "--provider": "provider",
-    "--base-url": "baseUrl",
-    "--model": "model",
   };
   for (let index = 0; index < args.length; index++) {
     const argument = args[index];
-    if (["--auto", "--apply", "--consent"].includes(argument)) {
-      options[argument.slice(2) as "auto" | "apply" | "consent"] = true;
+    if (["--auto", "--apply"].includes(argument)) {
+      options[argument.slice(2) as "auto" | "apply"] = true;
       continue;
     }
     if (["--json", "--help", "-h", "--version", "-v"].includes(argument)) {
@@ -267,9 +257,6 @@ export async function runCli(
           "snapshot restore",
           "health scan",
           "health fix",
-          "ai diagnose",
-          "ai configure",
-          "ai settings",
         ].includes(prefix)
       )
         throw new CliError(

@@ -127,27 +127,9 @@ const AdmZip = require("adm-zip");
     crash,
     "java.lang.OutOfMemoryError: Java heap space\naccessToken=private-smoke-token\nC:\\Users\\PrivateSmoke\\Game\\latest.log\n",
   );
-  const historicalAISettings = JSON.stringify({
-    enabled: true,
-    provider: "openai-compatible",
-    baseUrl: "http://127.0.0.1:1/v1",
-    model: "historical-ai-config-should-not-render",
-    timeoutMs: 1000,
-  });
-  const historicalAISecrets = JSON.stringify({
-    encryptedKey: "historical-placeholder-not-a-real-key",
-  });
-  await fs.writeFile(
-    path.join(dataDir, "ai-settings.json"),
-    historicalAISettings,
-  );
-  await fs.writeFile(
-    path.join(dataDir, "ai-secrets.json"),
-    historicalAISecrets,
-  );
   const environment = { ...process.env, LDFCL_DATA_DIR: dataDir };
   delete environment.ELECTRON_RUN_AS_NODE;
-  delete environment.LDFCL_AI_API_KEY;
+
   const executable =
     process.env.LDFCL_TEST_EXECUTABLE || process.env.LDFCL_TEST_EXE;
   const checks = [],
@@ -197,39 +179,6 @@ const AdmZip = require("adm-zip");
     await page
       .getByRole("heading", { name: "开始游戏", exact: true })
       .waitFor();
-    await app.evaluate(({ ipcMain }) => {
-      const original = ipcMain._invokeHandlers.get("launcher:call");
-      if (typeof original !== "function")
-        throw Error("Launcher IPC handler missing");
-      const audit = (globalThis.__ldfclDisabledAIQA = {
-        aiCalls: [],
-        shareCalls: [],
-      });
-      ipcMain.removeHandler("launcher:call");
-      ipcMain.handle("launcher:call", async (event, method, payload) => {
-        if (method.startsWith("ai:")) {
-          audit.aiCalls.push(method);
-          throw Error("Disabled AI UI attempted an AI request");
-        }
-        if (method === "diagnosis:share") {
-          audit.shareCalls.push(method);
-          throw Error("Disabled AI UI attempted a sharing preview");
-        }
-        const result = await original(event, method, payload);
-        if (method === "diagnosis:list")
-          return result.map((report) => ({
-            ...report,
-            ai: {
-              status: "enhanced",
-              provider: "mock",
-              generatedAt: "2025-01-01T00:00:00.000Z",
-              summary: "historical-ai-result-should-not-render",
-              recommendations: ["historical-ai-advice-should-not-render"],
-            },
-          }));
-        return result;
-      });
-    });
     assert.equal((await state()).system.gameRoot, gameRoot);
     await nav("游戏实例");
     await page.getByRole("button", { name: "健康与快照", exact: true }).click();
@@ -372,46 +321,6 @@ const AdmZip = require("adm-zip");
       "light/dark/system selected and saved via UI; system follows live color-scheme changes",
     );
 
-    const ai = page.getByRole("region", { name: "AI 服务设置", exact: true });
-    const enabled = ai.getByRole("button", {
-      name: "启用 AI 服务",
-      exact: true,
-    });
-    assert.equal(await enabled.getAttribute("aria-pressed"), "false");
-    assert.equal(await enabled.isDisabled(), true);
-    await ai
-      .getByRole("status")
-      .filter({ hasText: "AI 功能暂未启用，当前仅保留界面预览。" })
-      .waitFor();
-    const baseline = (await state()).settings;
-    const controls = ai.locator("input, select, textarea, button");
-    assert.ok((await controls.count()) >= 10);
-    for (const control of await controls.all())
-      assert.equal(await control.isDisabled(), true);
-    for (const input of await ai.locator("input, textarea").all())
-      assert.equal(await input.inputValue(), "");
-    assert.equal(
-      (await ai.textContent()).includes(
-        "historical-ai-config-should-not-render",
-      ),
-      false,
-    );
-    await ai.evaluate((section) => {
-      for (const button of section.querySelectorAll("button")) button.click();
-    });
-    assert.deepEqual((await state()).settings, baseline);
-    await ai.locator(".ai-suggestion").scrollIntoViewIfNeeded();
-    await page.screenshot({
-      path: path.join(output, "improvements-ai-preview.png"),
-    });
-    checks.push(
-      "AI settings is a static disabled preview, ignores historical enabled settings and leaves game configuration unchanged",
-    );
-    await page.screenshot({
-      path: path.join(output, "improvements-ai-settings.png"),
-      fullPage: false,
-    });
-
     const imported = await page.evaluate(
       async ({ id, file }) =>
         window.launcher.call("diagnosis:import", { instanceId: id, file }),
@@ -459,26 +368,6 @@ const AdmZip = require("adm-zip");
     await page
       .getByRole("heading", { name: "游戏或 Java 可用内存不足", exact: true })
       .waitFor();
-    const enhancement = page.getByRole("button", {
-      name: "AI 增强建议",
-      exact: true,
-    });
-    assert.equal(await enhancement.isDisabled(), true);
-    assert.equal(
-      await enhancement.getAttribute("title"),
-      "AI 功能暂未启用，当前仅保留界面预览。",
-    );
-    assert.equal(await page.locator(".diagnostic-ai-result").count(), 0);
-    assert.equal(
-      (await page.locator(".diagnostic-report").textContent()).includes(
-        "historical-ai-result-should-not-render",
-      ),
-      false,
-    );
-    assert.equal(
-      await page.getByRole("dialog", { name: "确认发送脱敏诊断" }).count(),
-      0,
-    );
     assert.equal(
       (await page.locator(".diagnostic-report").textContent()).includes(
         "private-smoke-token",
@@ -495,23 +384,12 @@ const AdmZip = require("adm-zip");
       await app.evaluate(({ clipboard }) => clipboard.readText()),
     );
     assert.equal(copiedDiagnosis.id, imported.id);
-    assert.equal("ai" in copiedDiagnosis, false);
     assert.equal(
       JSON.stringify(copiedDiagnosis).includes("private-smoke-token"),
       false,
     );
-    const aiAudit = await app.evaluate(() => globalThis.__ldfclDisabledAIQA);
-    assert.deepEqual(aiAudit, { aiCalls: [], shareCalls: [] });
-    assert.equal(
-      await fs.readFile(path.join(dataDir, "ai-settings.json"), "utf8"),
-      historicalAISettings,
-    );
-    assert.equal(
-      await fs.readFile(path.join(dataDir, "ai-secrets.json"), "utf8"),
-      historicalAISecrets,
-    );
     checks.push(
-      "logs retain and copy the latest 500 lines; local diagnosis and copy work, old AI results are hidden and excluded from copy, zero AI or sharing-preview calls",
+      "logs retain and copy the latest 500 lines; local diagnosis and copy work",
     );
     await page.evaluate(() => {
       document.querySelector("main.main-content").scrollTop = 0;
@@ -543,9 +421,6 @@ const AdmZip = require("adm-zip");
       pageErrors: errors,
       dataDir,
       gameLaunched: false,
-      remoteAIInvoked: false,
-      aiCalls: aiAudit.aiCalls,
-      sharingPreviewCalls: aiAudit.shareCalls,
     };
     await fs.writeFile(
       path.join(output, "improvements-smoke.json"),

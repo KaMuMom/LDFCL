@@ -3,7 +3,6 @@ import fs from "node:fs/promises";
 import { createLauncherCore } from "@ldfcl/core/launcher";
 import { resolveLauncherDataDirectory } from "@ldfcl/core/application-paths";
 import { resolveDefaultGameDirectoryPath } from "@ldfcl/core/game-directories";
-import { AI_DISABLED_MESSAGE } from "../shared/ai";
 
 interface AdvancedOptions {
   command: string[];
@@ -16,13 +15,8 @@ interface AdvancedOptions {
   bundle?: string;
   name?: string;
   snapshot?: string;
-  prompt?: string;
-  provider?: string;
-  baseUrl?: string;
-  model?: string;
   auto?: boolean;
   apply?: boolean;
-  consent?: boolean;
 }
 async function jsonFile(file: string) {
   const stat = await fs.lstat(file);
@@ -51,13 +45,8 @@ export async function runAdvanced(
       "snapshot restore",
       "health scan",
       "health fix",
-      "ai diagnose",
-      "ai configure",
-      "ai settings",
     ].includes(`${group} ${action}`);
   if (!recognized) return { handled: false };
-  // Reject before creating the core or reading any AI settings or key.
-  if (group === "ai") throw Error(AI_DISABLED_MESSAGE);
   if (group === "instance" && action === "diff") {
     if (!id || !options.command[3])
       throw Error("instance diff needs two manifest files");

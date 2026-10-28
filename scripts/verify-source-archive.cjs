@@ -180,7 +180,6 @@ function auditArchive(archive) {
     "core/services/snapshots.ts",
     "core/services/health.ts",
     "core/services/crash-diagnostics.ts",
-    "core/services/ai.ts",
     "cli/main.ts",
     "cli/commands.ts",
     "bin/ldfcl-cli.cjs",
@@ -485,7 +484,6 @@ async function verifyOutputs(sourceDirectory) {
     "core/dist/core/services/snapshots.js",
     "core/dist/core/services/health.js",
     "core/dist/core/services/crash-diagnostics.js",
-    "core/dist/core/services/ai.js",
   ]) {
     const file = path.join(sourceDirectory, ...relative.split("/")),
       real = await fs.realpath(file),

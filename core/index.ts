@@ -33,6 +33,5 @@ export * from "./services/neoforge";
 export * from "../shared/instance-storage";
 export * from "../shared/health";
 export * from "../shared/diagnostics";
-export * from "../shared/ai";
 export * from "../shared/game-presets";
 export * from "../shared/jvm-arguments";

@@ -23,10 +23,6 @@ const Module = require('node:module');
 const originalLoad = Module._load;
 const forbidden = [];
 Module._load = function(request, ...args) {
-  if (/[\\\\/]services[\\\\/]ai(?:\\.js)?$/.test(request)) {
-    forbidden.push(request);
-    throw new Error('Suspended AI module was loaded');
-  }
   if (request === 'electron' || request.startsWith('electron/')) {
     forbidden.push(request);
     throw new Error('Core attempted to load Electron: ' + request);

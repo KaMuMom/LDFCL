@@ -91,7 +91,6 @@ function run(f, args, extra = {}) {
           "node_options",
           "ldfcl_data_dir",
           "ldfcl_game_root",
-          "ldfcl_ai_api_key",
           "electron_run_as_node",
         ].includes(key.toLowerCase())
       )
@@ -305,36 +304,6 @@ test("advanced CLI health fix requires --auto and persists actual memory/Java co
     config.instances.find((i) => i.id === f.instance.id).memoryMb,
     undefined,
   );
-  assert.equal(
-    await fs.readFile(
-      path.join(f.directory, "saves", "世界", "level.dat"),
-      "utf8",
-    ),
-    "preserve-world",
-  );
-});
-
-test("suspended AI CLI fails before initializing core or changing any settings", async (t) => {
-  const f = await fixture(t);
-  const before = await fs.readFile(path.join(f.dataDir, "launcher.json"));
-  for (const args of [
-    ["ai", "settings", "--provider", "mock"],
-    ["ai", "configure", "--prompt", "自动内存", "--consent"],
-    ["ai", "diagnose", "unused", "--consent"],
-  ]) {
-    const result = await run(f, args);
-    assert.equal(result.code, 1);
-    assert.match(result.stderr, /AI 功能暂未启用/);
-    assert.equal(result.stdout, "");
-    assert.deepEqual(
-      await fs.readFile(path.join(f.dataDir, "launcher.json")),
-      before,
-    );
-  }
-  for (const file of ["ai-settings.json", "ai-secrets.json", "store"])
-    await assert.rejects(fs.access(path.join(f.dataDir, file)), {
-      code: "ENOENT",
-    });
   assert.equal(
     await fs.readFile(
       path.join(f.directory, "saves", "世界", "level.dat"),

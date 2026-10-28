@@ -46,7 +46,6 @@ import Instances from "./components/Instances";
 import GeneralGameSettings from "./components/GeneralGameSettings";
 import HealthPanel from "./components/HealthPanel";
 import Diagnostics from "./components/Diagnostics";
-import AISettings from "./components/AISettings";
 import { GAME_PRESETS, gamePreset } from "../shared/game-presets";
 import { GlassSurface } from "./ui/Glass";
 import { LAUNCHER_VERSION } from "../shared/launcher";
@@ -1714,9 +1713,6 @@ function LauncherSettings({
             </div>
             <span className="badge">Minecraft Java Edition</span>
           </div>
-        </GlassSurface>
-        <GlassSurface className="settings-panel full-span">
-          <AISettings call={call} />
         </GlassSurface>
       </div>
     </>

@@ -28,7 +28,7 @@ node .\bin\ldfcl-cli.cjs --version --json
 
 `instance list`、`java list` 使用 `Store.load({ readOnly: true })`。不创建业务数据目录、不备份或覆盖损坏配置、不迁移实例、不扫描新实例、不加载账号服务、不下载游戏或 Java。`java list` 会执行本地 Java 版本探测。缺少配置时实例列表为空；损坏配置报错并保留原件。
 
-其他高级命令除了只比较两个文件的 `instance diff` 外，会初始化完整 core，可能登记游戏根、准备旧版本布局并扫描版本、更新 `launcher.json` 与实例元数据。即使是 `store stats`、`snapshot list` 或 `ai settings` 查询，也不能当成完全无写入的操作。请先关闭 GUI，再运行会初始化 core 的高级 CLI；不同进程的实例存储锁不能代替整个启动器 registry 的并发写入控制。这些命令不提供账号登录、启动游戏或通用任意脚本执行入口。
+其他高级命令除了只比较两个文件的 `instance diff` 外，会初始化完整 core，可能登记游戏根、准备旧版本布局并扫描版本、更新 `launcher.json` 与实例元数据。即使是 `store stats`、`snapshot list` 查询，也不能当成完全无写入的操作。请先关闭 GUI，再运行会初始化 core 的高级 CLI；不同进程的实例存储锁不能代替整个启动器 registry 的并发写入控制。这些命令不提供账号登录、启动游戏或通用任意脚本执行入口。
 
 ```powershell
 node .\bin\ldfcl-cli.cjs instance list --json --program-dir "D:\游戏\LDFCL"
@@ -106,16 +106,12 @@ node .\bin\ldfcl-cli.cjs diagnose <实例ID> --json
 node .\bin\ldfcl-cli.cjs diagnose <实例ID> --file "D:\日志\crash-report.txt" --json
 ```
 
-不带 `--file` 时列出该实例已保存的诊断；带文件时导入本地日志并使用规则诊断，保存脱敏报告。诊断含分类、规则依据、建议、疑似 Mod 与置信度；没有证据时保留未知结论。规则诊断本身不需要 AI 或网络。CLI 没有单独的日志分享上传命令。
-
-## AI 命令（0.6.1 暂停）
-
-AI 仅保留桌面禁用界面。ai settings / diagnose / configure 均在初始化核心之前明确拒绝，不读取 AI 配置、密钥或 LDFCL_AI_API_KEY，不发送请求，也不修改账号或游戏设置。上一版接口与实现保留在历史 P0–P6 文档中。
+不带 `--file` 时列出该实例已保存的诊断；带文件时导入本地日志并使用规则诊断，保存脱敏报告。诊断含分类、规则依据、建议、疑似 Mod 与置信度；没有证据时保留未知结论。规则诊断完全在本地运行，不需要网络。CLI 没有单独的日志分享上传命令。
 
 ## 当前 CLI 范围和退出码
 
-命令行覆盖 P0 列表、P1 清单/CAS、P2 快照、P3 健康、P4 本地诊断、P5 静态占位（AI 命令暂停）。P6 的资源包/光影管理、NeoForge 安装、分片下载控制、预设与主题由桌面端提供；CLI 没有对应下载、安装、启动或主题修改命令。
+命令行覆盖 P0 列表、P1 清单/CAS、P2 快照、P3 健康、P4 本地诊断、P5 本地规则诊断。P6 的资源包/光影管理、NeoForge 安装、分片下载控制、预设与主题由桌面端提供；CLI 没有对应下载、安装、启动或主题修改命令。
 
 成功退出 `0`；未知命令、未知选项、缺少选项值等参数错误退出 `2`；文件/业务错误（含高级命令缺少所需业务参数）退出 `1`。使用 `--json` 时错误形如 `{"error":{"code":"…","message":"…"}}`，写入 stderr；以退出码判断成功，不要只检查 stdout 是否存在。
 
-自动化示例保留账号、真实世界和网络授权边界：离线测试使用独立 TEMP 数据根和合成实例，不代表已验证 Microsoft 登录、第三方模型连通性或所有整合包的游戏可玩性。
+自动化示例保留账号、真实世界和网络授权边界：离线测试使用独立 TEMP 数据根和合成实例，不代表已验证 Microsoft 登录或所有整合包的游戏可玩性。

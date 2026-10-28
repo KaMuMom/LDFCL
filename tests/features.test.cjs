@@ -112,62 +112,6 @@ test("opening and browsing game roots do not migrate all instance content; first
   );
 });
 
-test("suspended AI never reads saved settings or secrets and every AI operation fails without mutations", async (t) => {
-  const f = await fixture(t);
-  const dataDir = path.join(f.root, "LDFCL-data");
-  const files = ["ai-settings.json", "ai-secrets.json"];
-  for (const file of files)
-    await fs.writeFile(
-      path.join(dataDir, file),
-      "saved-data-must-stay-unchanged",
-    );
-  const originalRead = fs.readFile;
-  const attempts = [];
-  fs.readFile = async function (file, ...args) {
-    if (files.includes(path.basename(String(file)))) {
-      attempts.push(String(file));
-      throw Error("AI files must not be opened");
-    }
-    return originalRead.call(this, file, ...args);
-  };
-  let restarted;
-  try {
-    restarted = await createLauncherCore({
-      dataDir,
-      defaultGameRoot: f.gameRoot,
-      host,
-    });
-    const before = await originalRead(path.join(dataDir, "launcher.json"));
-    for (const method of [
-      "ai:settings/get",
-      "ai:settings/save",
-      "ai:configure",
-      "ai:diagnose",
-      "ai:apply",
-    ])
-      await assert.rejects(
-        restarted.call(method, {
-          provider: "openai",
-          enabled: true,
-          consent: true,
-        }),
-        /AI 功能暂未启用/,
-      );
-    assert.deepEqual(
-      await originalRead(path.join(dataDir, "launcher.json")),
-      before,
-    );
-    assert.deepEqual(attempts, []);
-  } finally {
-    fs.readFile = originalRead;
-    restarted?.dispose();
-  }
-  for (const file of files)
-    assert.equal(
-      await fs.readFile(path.join(dataDir, file), "utf8"),
-      "saved-data-must-stay-unchanged",
-    );
-});
 test("core instance mutations create snapshots and rollback synchronizes registry without touching worlds", async (t) => {
   const f = await fixture(t);
   await f.core.call("instance:save", {

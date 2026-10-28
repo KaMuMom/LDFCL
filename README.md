@@ -1,6 +1,6 @@
 # LDFCL 0.6.2-beta.1
 
-新增 Microsoft 应用 ID 本机加密保存和界面隐藏，设备授权码在打开微软页面前自动复制。保留 0.6.1 的主窗口修复，AI 后台仍暂停。源码发布至 [`beta` 分支](https://github.com/KaMuMom/LDFCL/tree/beta)，本次未创建 GitHub Release；本地编译产物位于 `release/0.6.2-beta.1/`。实现及保护范围见 [登录改进说明](docs/0.6.2_BETA_LOGIN.md)，验证见 [VALIDATION.md](VALIDATION.md)。
+新增 Microsoft 应用 ID 本机加密保存和界面隐藏，设备授权码在打开微软页面前自动复制。保留 0.6.1 的主窗口修复和本地规则诊断。源码发布至 [`beta` 分支](https://github.com/KaMuMom/LDFCL/tree/beta)，本次未创建 GitHub Release；本地编译产物位于 `release/0.6.2-beta.1/`。实现及保护范围见 [登录改进说明](docs/0.6.2_BETA_LOGIN.md)，验证见 [VALIDATION.md](VALIDATION.md)。
 
 以下版本记录作为历史保留。
 
@@ -8,11 +8,11 @@
 
 # LDFCL 0.6.1
 
-0.6.1 修复“进程存在但主窗口不显示”：窗口先显示加载状态，核心准备及界面加载失败可见并可重试；启动和切换游戏根不再完整迁移所有实例。AI 后台已暂停，仅保留禁用的 UI 预览，不读取 AI 配置/密钥或发送请求；本地规则诊断继续可用。详见 [启动修复说明](docs/0.6.1_STARTUP_FIX.md)。新 EXE、源码与验证记录在 `release/0.6.1/`，没有上传 GitHub。
+0.6.1 修复“进程存在但主窗口不显示”：窗口先显示加载状态，核心准备及界面加载失败可见并可重试；启动和切换游戏根不再完整迁移所有实例。本地规则诊断、日志、健康扫描和快照继续可用。详见 [启动修复说明](docs/0.6.1_STARTUP_FIX.md)。新 EXE、源码与验证记录在 `release/0.6.1/`，没有上传 GitHub。
 
-以下 0.6.0 的 P0–P6 记录作为上一版功能说明，其中 AI 功能在当前版本已暂停。
+以下 0.6.0 的 P0–P6 记录作为上一版功能说明。
 
-0.6.0 已实现 P0–P6：独立 `@ldfcl/core` / CLI、SHA-256 内容存储和实例清单重建、自动快照回滚、健康扫描修复、规则崩溃诊断、可选 AI、NeoForge、镜像与下载续传控制、资源包/光影启停、四档预设和主题。实现与验证范围见 [P0–P6 说明](docs/P0_P6_IMPLEMENTATION.md)、[当前功能总结](docs/CURRENT_FEATURES_AND_IMPLEMENTATION.md) 与 [CLI 使用说明](docs/CLI.md)。
+0.6.0 已实现 P0–P6：独立 `@ldfcl/core` / CLI、SHA-256 内容存储和实例清单重建、自动快照回滚、健康扫描修复、规则崩溃诊断、NeoForge、镜像与下载续传控制、资源包/光影启停、四档预设和主题。实现与验证范围见 [P0–P6 说明](docs/P0_P6_IMPLEMENTATION.md)、[当前功能总结](docs/CURRENT_FEATURES_AND_IMPLEMENTATION.md) 与 [CLI 使用说明](docs/CLI.md)。
 
 本轮本地发行文件在 `release/p0-p6/`，没有上传 GitHub；下面的 GitHub 下载链接保留为历史 0.5.0 发行入口。
 
@@ -52,8 +52,6 @@ Minecraft 版本、Mod、整合包、资源包和光影包统一放入「资源�
 │   ├── skins/             # 皮肤库索引及 PNG
 │   ├── store/             # SHA-256 内容对象与清单索引
 │   ├── diagnostics/       # 脱敏崩溃报告
-│   ├── ai-settings.json   # AI 配置，不含明文密钥
-│   ├── ai-secrets.json    # 系统加密的 AI 密钥（可用时）
 │   └── translations/mods/ # 自定义 Mod 中文扩展
 └── .minecraft/            # 默认游戏目录
 ```

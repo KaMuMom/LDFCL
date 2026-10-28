@@ -35,7 +35,6 @@ import {
   controlDownload,
   setTaskDownloadSource,
 } from "./services/downloads";
-import { AI_DISABLED_MESSAGE } from "../shared/ai";
 import { ContentPacksService } from "./services/content-packs";
 
 export interface LauncherCoreOptions {
@@ -323,8 +322,6 @@ export async function createLauncherCore(
     }
   }
   async function call(method: string, p: any = {}) {
-    // No AI module, settings, credential reads or network requests are reachable.
-    if (method.startsWith("ai:")) throw Error(AI_DISABLED_MESSAGE);
     if (
       directoryChanging &&
       (/^(?:instance:|content:|content-packs:|mods:|pack:|snapshot:|health:|packs:)/.test(

@@ -101,7 +101,7 @@ Microsoft、Xbox 和 Minecraft 账号连接保留 HTTPS 服务器证书验证；
 
 感谢 **Mojang / Microsoft** 提供游戏清单、资源和账号服务；**Fabric、Quilt、Forge、[NeoForged](https://neoforged.net/)** 维护加载器；**sp614x / OptiFine** 提供画面优化组件；**BMCLAPI** 提供 OptiFine 元数据、安装器及公开游戏资源镜像；**Eclipse Adoptium / Temurin、Azul / Zulu** 提供 OpenJDK 运行库；**yushijinhun 与 authlib-injector 贡献者** 提供第三方 Yggdrasil 兼容组件。
 
-0.6.0 的 NeoForge 集成使用官方 Maven 元数据和安装器及其 SHA-1 校验文件，在独立阶段目录运行官方客户端安装流程；没有复制或内嵌 NeoForge 上游源码。资源包启停遵循 Minecraft options 格式，光影配置适配 Iris、Oculus、OptiFine；这些项目的作者及贡献者保留各自作品的版权。可选 AI 仅实现兼容 HTTP 接口，不附送模型、服务额度或第三方密钥。
+0.6.0 的 NeoForge 集成使用官方 Maven 元数据和安装器及其 SHA-1 校验文件，在独立阶段目录运行官方客户端安装流程；没有复制或内嵌 NeoForge 上游源码。资源包启停遵循 Minecraft options 格式，光影配置适配 Iris、Oculus、OptiFine；这些项目的作者及贡献者保留各自作品的版权。诊断功能仅使用本地规则，不依赖外部模型或第三方服务。
 
 这些组件在用户请求相关操作时按需获取。Java 发行版及各加载器保留原有法律声明；authlib-injector 遵循其 GPL-3.0 许可。LDFCL 不重新授权这些软件，也不附送 Minecraft 游戏权益、正版皮肤或披风资格。
 

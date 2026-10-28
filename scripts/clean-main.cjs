@@ -5,3 +5,5 @@ const path = require("node:path");
 // of the business layer alongside the workspace core package.
 const output = path.resolve(__dirname, "..", "dist-electron");
 fs.rmSync(output, { recursive: true, force: true });
+const coreOutput = path.resolve(__dirname, "..", "core", "dist");
+fs.rmSync(coreOutput, { recursive: true, force: true });

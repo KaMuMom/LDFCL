@@ -5,12 +5,10 @@ import {
   FileInput,
   RefreshCw,
   ShieldCheck,
-  Sparkles,
   Terminal,
 } from "lucide-react";
 import type { Instance, LauncherAPI } from "../../shared/types";
 import type { CrashDiagnosis } from "../../shared/diagnostics";
-import { AI_DISABLED_MESSAGE } from "../../shared/ai";
 import { GlassSurface } from "../ui/Glass";
 import "./diagnostics.css";
 
@@ -39,7 +37,9 @@ function message(error: unknown) {
 }
 
 function localReport(report: CrashDiagnosis): CrashDiagnosis {
-  const { ai: _historicalAI, ...local } = report;
+  const { ai: _historicalAI, ...local } = report as CrashDiagnosis & {
+    ai?: unknown;
+  };
   return local;
 }
 
@@ -301,14 +301,6 @@ export default function Diagnostics({
               <div className="button-group">
                 <button
                   className="btn subtle"
-                  disabled
-                  title={AI_DISABLED_MESSAGE}
-                >
-                  <Sparkles size={15} />
-                  AI 增强建议
-                </button>
-                <button
-                  className="btn subtle"
                   disabled={busy}
                   onClick={() => void copy(JSON.stringify(current, null, 2))}
                 >
@@ -316,7 +308,6 @@ export default function Diagnostics({
                   复制诊断
                 </button>
               </div>
-              <p className="muted">{AI_DISABLED_MESSAGE}</p>
               <h3>建议处理步骤</h3>
               <ol>
                 {current.recommendations.map((recommendation, index) => (

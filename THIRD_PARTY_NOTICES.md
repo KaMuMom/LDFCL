@@ -130,6 +130,6 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 - [authlib-injector](https://github.com/yushijinhun/authlib-injector): downloaded on demand for third-party Yggdrasil authentication; licensed under GPL-3.0. It runs as a separate Java agent and is not embedded into this TypeScript project's source license.
 - [Modrinth](https://modrinth.com/): content API and download links; individual mods, modpacks, resource packs and shaders retain their authors' licenses. Installing them does not relicense them under LDFCL's MIT license.
 - Iris, Oculus and OptiFine: LDFCL reads and writes their user configuration formats to select a shader pack. Their implementation and shader packs are not bundled or relicensed.
-- Optional OpenAI-compatible AI endpoints are configured by the user. No third-party models, credentials or credits are included. The mock provider and rule diagnostics operate locally.
+- Crash diagnosis uses local rules and does not bundle or call third-party model services.
 
 This application does not bundle paid Minecraft content or grant Microsoft account, skin, cape, or game ownership rights.

@@ -22,17 +22,7 @@ export interface SuspectedMod {
   confidence: number;
 }
 
-export interface AIEnhancement {
-  status: "enhanced" | "fallback" | "disabled";
-  provider: "mock" | "openai-compatible";
-  generatedAt: string;
-  summary?: string;
-  recommendations?: string[];
-  suspectedMods?: SuspectedMod[];
-  message?: string;
-}
-
-/** Rule evidence is immutable input to optional AI enhancement. */
+/** Rule evidence is immutable input to local diagnosis. */
 export interface CrashDiagnosis {
   schemaVersion: 1;
   id: string;
@@ -52,7 +42,6 @@ export interface CrashDiagnosis {
   logTail: string[];
   collectedFiles: string[];
   warnings: string[];
-  ai?: AIEnhancement;
 }
 
 export interface DiagnosisMod {
