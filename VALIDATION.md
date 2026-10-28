@@ -52,7 +52,7 @@ Client ID 是 OAuth 公开标识，此改动保护本机保存与界面展示；
 
 最终 EXE、源码、成品验证汇总和 SHA-256 保存在 `release/p0-p6/`。内嵌文档记录封装当时状态，源码与外部记录补记封装后结果。源码独立构建的准确归档摘要与日志以同目录 `verification.json` 及源码重建报告为准。
 
-本轮未执行真实 Microsoft 授权、正版皮肤/披风在线操作或外部模型服务调用。规则、Mock与网络失败测试使用本地文件/受控服务；真实 NeoForge 初始化不包含进入存档、多人联机、长期稳定性或Mod组合可玩性验证。程序未做 Authenticode 签名。
+本轮未执行真实 Microsoft 授权、正版皮肤/披风在线操作或实际游戏启动。规则、Mock与网络失败测试使用本地文件/受控服务；真实 NeoForge 初始化不包含进入存档、多人联机、长期稳定性或Mod组合可玩性验证。程序未做 Authenticode 签名。
 
 ---
 
@@ -328,9 +328,9 @@ Electron 的系统加密密钥配置保留原路径，以便已有密文继续�
 
 发行文件：
 
-- `release/LDFCL-0.2.1-Windows-x64.exe`
-- `release/LDFCL-0.2.1-source.zip`
-- `release/SHA256SUMS.txt`
+- EXE：`release/LDFCL-0.2.1-Windows-x64.exe`
+- 源码包：`release/LDFCL-0.2.1-source.zip`
+- 校验文件：`release/SHA256SUMS.txt`
 
 设备代码流程自动测试采用受控微软响应，不能替代真实应用资格和正版账号验证。真实 Microsoft/Yggdrasil 账号操作、正版皮肤/披风变更与本轮游戏实装均未验证。
 
@@ -409,10 +409,10 @@ node tests/home-layout-smoke.cjs
 
 已生成发行文件：
 
-- `release/LDFCL-0.2.0-Windows-x64.exe`
-- `release/LDFCL-0.2.0-source.zip`
-- `release/SHA256SUMS.txt`
-- `release/VALIDATION.md`
+- EXE：`release/LDFCL-0.2.0-Windows-x64.exe`
+- 源码包：`release/LDFCL-0.2.0-source.zip`
+- 校验文件：`release/SHA256SUMS.txt`
+- 验证记录：`release/VALIDATION.md`
 
 最终便携程序 `LDFCL-0.2.0-Windows-x64.exe` 为 **87,362,662 字节**，Windows x64，未作 Authenticode 签名。直接执行最终 EXE 的 `node tests/portable-smoke.cjs` 返回 `passed: true`：自解压、打包界面、Dock 与首页 3D 预览/账号/版本卡、preload IPC、干净的首次运行数据、离线账号、官方版本清单（当次返回 919 项）、3D 衣柜及正常退出均通过。
 

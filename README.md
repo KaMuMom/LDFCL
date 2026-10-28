@@ -2,8 +2,6 @@
 
 新增 Microsoft 应用 ID 本机加密保存和界面隐藏，设备授权码在打开微软页面前自动复制。保留 0.6.1 的主窗口修复和本地规则诊断。源码发布至 [`beta` 分支](https://github.com/KaMuMom/LDFCL/tree/beta)，本次未创建 GitHub Release；本地编译产物位于 `release/0.6.2-beta.1/`。实现及保护范围见 [登录改进说明](docs/0.6.2_BETA_LOGIN.md)，验证见 [VALIDATION.md](VALIDATION.md)。
 
-以下版本记录作为历史保留。
-
 ---
 
 # LDFCL 0.6.1
