@@ -1,6 +1,6 @@
 # LDFCL 0.6.2-beta.1：AI 功能移除验证
 
-日期：2026-10-28（Asia/Hong_Kong）。源码分支 [`beta`](https://github.com/KaMuMom/LDFCL/tree/beta)，本次不创建 GitHub Release。登录配置与授权码实现说明见 [登录改进](docs/0.6.2_BETA_LOGIN.md)。
+日期：2026-10-28（Asia/Hong_Kong）。源码分支 [`main`](https://github.com/KaMuMom/LDFCL/tree/main)，对应 [GitHub Release v0.6.2-beta.1](https://github.com/KaMuMom/LDFCL/releases/tag/v0.6.2-beta.1)。登录配置与授权码实现说明见 [登录改进](docs/0.6.2_BETA_LOGIN.md)。
 
 - 已删除 AI 服务、设置页面、IPC/CLI 入口、AI 配置文件与对应测试；保留本地规则诊断、日志、健康扫描和快照。
 - `npm run build` 通过；随后 `node --test tests/*.test.cjs` **333/333 通过，0 失败、0 跳过**。

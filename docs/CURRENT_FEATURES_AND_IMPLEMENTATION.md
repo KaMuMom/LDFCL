@@ -1,6 +1,6 @@
 # LDFCL 当前功能与实现方式
 
-更新：2026-10-22，当前版本 **0.6.2-beta.1**，源码见 GitHub `beta` 分支，本次未创建新 Release。[微软登录配置及授权码改进](0.6.2_BETA_LOGIN.md)说明本次变化；[启动修复](0.6.1_STARTUP_FIX.md)、[P0–P6](P0_P6_IMPLEMENTATION.md)保留已有实现，命令见 [CLI](CLI.md)，成品检查见 [VALIDATION](../VALIDATION.md)。
+更新：2026-10-28，当前版本 **0.6.2-beta.1**，源码见 GitHub `main` 分支，对应 [GitHub Release](https://github.com/KaMuMom/LDFCL/releases/tag/v0.6.2-beta.1)。[微软登录配置及授权码改进](0.6.2_BETA_LOGIN.md)说明本次变化；[启动修复](0.6.1_STARTUP_FIX.md)、[P0–P6](P0_P6_IMPLEMENTATION.md)保留已有实现，命令见 [CLI](CLI.md)，成品检查见 [VALIDATION](../VALIDATION.md)。
 
 ## 架构
 
