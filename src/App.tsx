@@ -777,14 +777,13 @@ export default function App() {
           </Suspense>
         </main>
       </div>
-      {page !== "settings" && (
-        <LauncherUpdates
-          state={launcherUpdate}
-          call={call}
-          notify={notify}
-          compact
-        />
-      )}
+      <LauncherUpdates
+        state={launcherUpdate}
+        call={call}
+        notify={notify}
+        compact
+        suppressPopup={page === "settings"}
+      />
       {toast && (
         <GlassSurface as="div" role="status" className="toast" radius={20}>
           <span>{toast}</span>

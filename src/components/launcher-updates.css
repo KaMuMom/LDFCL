@@ -1,19 +1,130 @@
-.launcher-update-banner,
 .launcher-update-panel {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
 }
-.launcher-update-banner {
+.launcher-update-popup-region {
   position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(650px, calc(100% - 70px));
-  z-index: 70;
-  padding: 16px 20px;
-  border-radius: 20px;
+  top: 72px;
+  right: 24px;
+  z-index: 90;
+  width: min(560px, calc(100vw - 120px));
+  pointer-events: none;
+  -webkit-app-region: no-drag;
+}
+.launcher-update-popup {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-height: min(380px, calc(100dvh - 96px));
+  overflow: hidden;
+  pointer-events: auto;
+}
+.launcher-update-popup .glass-backdrop::after {
+  background: #f8fbfff5;
+}
+:root[data-theme="dark"] .launcher-update-popup .glass-backdrop::after {
+  background: #223044fa;
+}
+.launcher-update-popup-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 18px 8px 20px;
+}
+.launcher-update-popup-heading > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.launcher-update-eyebrow {
+  color: var(--muted);
+  font-size: 11px;
+}
+.launcher-update-popup-heading strong {
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.launcher-update-popup-heading > button {
+  flex-shrink: 0;
+}
+.launcher-update-popup-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 20px;
+  scrollbar-gutter: stable;
+}
+.launcher-update-popup-body p {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.launcher-update-version {
+  color: var(--muted);
+}
+.launcher-update-message {
+  white-space: pre-wrap;
+}
+.launcher-update-attempt {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--accent-soft);
+  overflow-wrap: anywhere;
+}
+.launcher-update-attempt > strong {
+  font-size: 12px;
+}
+.launcher-update-attempt > p:last-child {
+  margin-bottom: 0;
+}
+.launcher-update-attempt code {
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+.launcher-update-popup-footer {
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border);
+}
+.launcher-update-popup-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.launcher-update-popup-bottom > p {
+  flex: 1 1 145px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.launcher-update-popup .launcher-update-actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+.launcher-update-progress {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.launcher-update-progress progress {
+  width: 100%;
+  height: 7px;
+  accent-color: var(--accent, #4a72c9);
+}
+@media (max-width: 600px) {
+  .launcher-update-popup-region {
+    right: 12px;
+    width: calc(100vw - 24px);
+  }
 }
 .launcher-update-copy {
   min-width: 0;
@@ -37,9 +148,6 @@
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
-}
-.launcher-update-banner .launcher-update-actions {
-  flex-shrink: 0;
 }
 @media (max-width: 1000px) {
   .launcher-update-panel {

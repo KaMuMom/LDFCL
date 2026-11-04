@@ -1,9 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import https from "node:https";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
-import type { LauncherUpdateState } from "../shared/updates";
+import type {
+  LauncherUpdateAttempt,
+  LauncherUpdateState,
+} from "../shared/updates";
+import { UPDATE_HELPER } from "./update-helper";
+export { UPDATE_HELPER } from "./update-helper";
 
 export const RELEASE_PAGE = "https://github.com/KaMuMom/LDFCL/releases/latest";
 const LATEST_API = "https://api.github.com/repos/KaMuMom/LDFCL/releases/latest";
@@ -244,49 +249,132 @@ export async function downloadUpdate(
   }
 }
 
-// Parameters are passed as process arguments; user paths are never interpolated into script code.
-export const UPDATE_HELPER = `param([string]$Target,[string]$Staged,[string]$Backup,[string]$Expected,[int]$LauncherPid)
-$ErrorActionPreference = 'Stop'
-$Log = [System.IO.Path]::Combine([System.IO.Path]::GetDirectoryName($Staged), 'update.log')
-function Test-UpdateHash {
-  $Stream = [System.IO.File]::OpenRead($Staged)
-  $Hasher = [System.Security.Cryptography.SHA256]::Create()
-  try { $Actual = [System.BitConverter]::ToString($Hasher.ComputeHash($Stream)).Replace('-', '').ToLowerInvariant() }
-  finally { $Stream.Dispose(); $Hasher.Dispose() }
-  if ($Actual -ne $Expected) { throw 'Update checksum mismatch' }
+export interface UpdateTransaction {
+  schema: 1;
+  id: string;
+  nonce: string;
+  target: string;
+  staged: string;
+  backup: string;
+  expected: string;
+  version: string;
+  launcherPid: number;
+  arguments: string[];
+  exitTimeoutMs: number;
+  replaceTimeoutMs: number;
+  healthTimeoutMs: number;
+  healthGraceMs: number;
 }
-try {
-  Test-UpdateHash
-  $Parent = $null
-  try { $Parent = [System.Diagnostics.Process]::GetProcessById($LauncherPid) } catch {}
-  if ($Parent) { $Parent.WaitForExit() }
-  Test-UpdateHash
-  $Moved = $false
-  for ($Attempt = 0; $Attempt -lt 120; $Attempt++) {
-    try { [System.IO.File]::Move($Target, $Backup); $Moved = $true; break }
-    catch { [System.Threading.Thread]::Sleep(500) }
-  }
-  if (-not $Moved) { throw 'Could not replace launcher; original file was kept' }
-  try { [System.IO.File]::Move($Staged, $Target) }
-  catch { [System.IO.File]::Move($Backup, $Target); throw }
+
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const updateRoot = (executable: string) =>
+  path.join(path.dirname(executable), ".ldfcl-update");
+
+async function readJson(file: string): Promise<any> {
+  const stat = await fs.lstat(file);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 65536)
+    throw Error("更新事务文件无效。");
+  return JSON.parse(await fs.readFile(file, "utf8"));
+}
+
+async function writeJsonAtomic(file: string, value: unknown): Promise<void> {
+  const temporary = `${file}.${randomUUID()}.tmp`;
   try {
-    $Start = New-Object System.Diagnostics.ProcessStartInfo
-    $Start.FileName = $Target
-    $Start.WorkingDirectory = [System.IO.Path]::GetDirectoryName($Target)
-    $Start.UseShellExecute = $false
-    $Start.CreateNoWindow = $true
-    [System.Diagnostics.Process]::Start($Start) | Out-Null
+    const handle = await fs.open(temporary, "wx");
+    try {
+      await handle.writeFile(JSON.stringify(value));
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await fs.rename(temporary, file);
+  } finally {
+    await fs.unlink(temporary).catch(() => {});
   }
-  catch {
-    [System.IO.File]::Move($Target, $Staged)
-    [System.IO.File]::Move($Backup, $Target)
-    throw
-  }
-  [System.IO.File]::WriteAllText($Log, 'Update installed; previous launcher retained as backup')
-} catch {
-  [System.IO.File]::WriteAllText($Log, $_.Exception.Message)
 }
-`;
+
+export async function waitHelperReady(
+  transactionFile: string,
+  transaction: UpdateTransaction,
+  timeout = 15000,
+  failure?: () => string | undefined,
+): Promise<void> {
+  const folder = path.dirname(transactionFile);
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const reason = failure?.();
+    if (reason) throw Error(reason);
+    try {
+      const ready = await readJson(path.join(folder, "ready.json"));
+      if (ready.id !== transaction.id || ready.nonce !== transaction.nonce)
+        throw Error("更新助手握手不匹配。");
+      return;
+    } catch (error: any) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    try {
+      const result = await readJson(path.join(folder, "result.json"));
+      throw Error(`更新助手准备失败：${String(result.message).slice(0, 1200)}`);
+    } catch (error: any) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    await pause(100);
+  }
+  throw Error(
+    "更新助手未在规定时间内确认就绪，当前启动器已保留。请重试或查看更新日志。",
+  );
+}
+
+async function launchUpdateHelper(
+  script: string,
+  transactionFile: string,
+  transaction: UpdateTransaction,
+): Promise<void> {
+  let failure: string | undefined;
+  let diagnostic = "";
+  const child = spawn(
+    path.join(
+      process.env.SystemRoot || "C:\\Windows",
+      "System32",
+      "WindowsPowerShell",
+      "v1.0",
+      "powershell.exe",
+    ),
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-WindowStyle",
+      "Hidden",
+      "-File",
+      script,
+      "-Transaction",
+      transactionFile,
+    ],
+    {
+      detached: true,
+      stdio: ["ignore", "ignore", "pipe"],
+      windowsHide: true,
+      cwd: path.dirname(transaction.target),
+    },
+  );
+  child.stderr?.on("data", (chunk) => {
+    diagnostic = (diagnostic + chunk.toString()).slice(-2400);
+  });
+  child.once("error", (error) => {
+    failure = error.message;
+  });
+  child.once("exit", (code) => {
+    failure = `更新助手提前退出（代码 ${code}）。${diagnostic.trim()}`;
+  });
+  try {
+    await waitHelperReady(transactionFile, transaction, 15000, () => failure);
+  } finally {
+    child.stderr?.destroy();
+    child.unref();
+  }
+}
 
 interface UpdaterOptions {
   currentVersion: string;
@@ -297,6 +385,13 @@ interface UpdaterOptions {
   fetchText?: typeof fetchUpdateText;
   download?: typeof downloadUpdate;
   launchHelper?: (script: string, arguments_: string[]) => Promise<void>;
+  restartArguments?: string[];
+  transactionTimeouts?: Partial<
+    Pick<
+      UpdateTransaction,
+      "exitTimeoutMs" | "replaceTimeoutMs" | "healthTimeoutMs" | "healthGraceMs"
+    >
+  >;
 }
 
 export class LauncherUpdater {
@@ -304,6 +399,7 @@ export class LauncherUpdater {
   private release?: UpdateRelease;
   private operation?: Promise<LauncherUpdateState>;
   private staged?: { file: string; expected: string; folder: string };
+  private recoveryMessage?: string;
   constructor(private options: UpdaterOptions) {
     this.value = {
       status: "idle",
@@ -319,12 +415,139 @@ export class LauncherUpdater {
     this.value = { ...this.value, ...changes };
     this.options.emit(this.state());
   }
+  async confirmStartup(): Promise<{ autoCheck: boolean }> {
+    if (!this.options.executable) return { autoCheck: true };
+    const root = updateRoot(this.options.executable);
+    const transactionFile = process.env.LDFCL_UPDATE_TRANSACTION;
+    const nonce = process.env.LDFCL_UPDATE_NONCE;
+    delete process.env.LDFCL_UPDATE_TRANSACTION;
+    delete process.env.LDFCL_UPDATE_NONCE;
+    try {
+      let confirmedResult: any;
+      if (transactionFile || nonce) {
+        const relative = path.relative(root, transactionFile || "");
+        if (
+          !relative ||
+          relative.startsWith("..") ||
+          path.isAbsolute(relative) ||
+          path.basename(transactionFile!) !== "transaction.json"
+        )
+          throw Error("更新启动回执路径无效。");
+        const transaction = await readJson(transactionFile!);
+        if (
+          transaction.schema !== 1 ||
+          transaction.nonce !== nonce ||
+          !/^[a-f0-9]{64}$/.test(nonce || "") ||
+          path.resolve(transaction.target).toLowerCase() !==
+            path.resolve(this.options.executable).toLowerCase() ||
+          transaction.version !== this.options.currentVersion
+        )
+          throw Error("更新启动信息与当前便携程序不匹配。");
+        const folder = path.dirname(transactionFile!);
+        await writeJsonAtomic(path.join(folder, "healthy.json"), {
+          id: transaction.id,
+          nonce,
+          version: this.options.currentVersion,
+          processId: process.pid,
+        });
+        const deadline = Date.now() + 15000;
+        let completed = false;
+        while (Date.now() < deadline) {
+          try {
+            confirmedResult = await readJson(path.join(folder, "result.json"));
+            if (
+              confirmedResult.id !== transaction.id ||
+              confirmedResult.version !== transaction.version ||
+              path.resolve(confirmedResult.target).toLowerCase() !==
+                path.resolve(transaction.target).toLowerCase()
+            )
+              throw Error("更新结果与启动事务不匹配。");
+            completed = true;
+            break;
+          } catch (error: any) {
+            if (error?.code !== "ENOENT") throw error;
+          }
+          await pause(100);
+        }
+        if (!completed)
+          throw Error(
+            "新程序已启动，但更新助手尚未确认安装结果。请保留日志并重新打开启动器核对。",
+          );
+      }
+      let result: any = confirmedResult;
+      if (!result) {
+        try {
+          result = await readJson(path.join(root, "last-result.json"));
+        } catch (error: any) {
+          if (error?.code !== "ENOENT") throw error;
+        }
+        let pending: any;
+        try {
+          pending = await readJson(path.join(root, "pending.json"));
+        } catch (error: any) {
+          if (error?.code !== "ENOENT") throw error;
+        }
+        if (
+          pending &&
+          stableVersion(pending.version) &&
+          newerVersion(pending.version, this.options.currentVersion) &&
+          (!result ||
+            (pending.id !== result.id &&
+              Date.parse(pending.startedAt) > Date.parse(result.completedAt)))
+        )
+          result = {
+            ...pending,
+            status: "failed",
+            completedAt: new Date().toISOString(),
+            message: "上次更新助手未完成确认，当前版本已保留。",
+          };
+      }
+      if (!result) return { autoCheck: true };
+      if (
+        !["installed", "failed", "rolled-back"].includes(result.status) ||
+        !stableVersion(result.version) ||
+        path.resolve(result.target).toLowerCase() !==
+          path.resolve(this.options.executable).toLowerCase()
+      )
+        throw Error("上次更新结果文件无效。");
+      if (
+        result.status === "installed" &&
+        result.version !== this.options.currentVersion
+      )
+        return { autoCheck: true };
+      const message =
+        result.status === "installed"
+          ? `已成功更新至 ${result.version}，旧程序备份已保留。`
+          : `${result.status === "rolled-back" ? "上次更新启动失败，已恢复原版本。" : "上次更新未完成，当前程序已保留。"} ${String(result.message || "请重新检查更新。").slice(0, 1200)}`;
+      const attempt: LauncherUpdateAttempt = {
+        id: String(result.id),
+        status: result.status,
+        version: result.version,
+        completedAt: String(result.completedAt),
+        message,
+        logPath:
+          typeof result.logPath === "string" ? result.logPath : undefined,
+      };
+      this.recoveryMessage = message;
+      this.set({
+        status: result.status === "installed" ? "current" : "error",
+        message,
+        lastAttempt: attempt,
+      });
+      return { autoCheck: result.status === "installed" };
+    } catch (error) {
+      this.recoveryMessage =
+        error instanceof Error ? error.message : "暂时无法核对上次更新结果。";
+      this.set({ status: "error", message: this.recoveryMessage });
+      return { autoCheck: false };
+    }
+  }
   check(): Promise<LauncherUpdateState> {
     if (this.operation) return this.operation;
     if (["ready", "installing"].includes(this.value.status))
       return Promise.resolve(this.state());
     this.operation = (async () => {
-      this.set({ status: "checking", message: undefined });
+      this.set({ status: "checking", message: this.recoveryMessage });
       try {
         const release = parseRelease(
           JSON.parse(
@@ -373,6 +596,7 @@ export class LauncherUpdater {
         this.set({
           status: "downloading",
           message: undefined,
+          lastAttempt: undefined,
           receivedBytes: 0,
           totalBytes: this.release.asset.size,
         });
@@ -433,65 +657,68 @@ export class LauncherUpdater {
     )
       throw Error("请先完成更新下载。");
     const { folder, file, expected } = this.staged;
-    const helper = path.join(folder, "install.ps1");
+    const attemptFolder = path.join(folder, randomUUID());
+    const helper = path.join(attemptFolder, "install.ps1");
+    const transactionFile = path.join(attemptFolder, "transaction.json");
     this.set({ status: "installing", message: "正在退出并应用更新…" });
-    let helperCreated = false;
     try {
       await this.options.canInstall();
       const stat = await fs.lstat(this.options.executable);
       if (!stat.isFile() || stat.isSymbolicLink())
         throw Error("当前程序不是可替换的便携版文件。");
-      await fs.writeFile(helper, "\ufeff" + UPDATE_HELPER, { flag: "wx" });
-      helperCreated = true;
-      const arguments_ = [
-        "-Target",
-        this.options.executable,
-        "-Staged",
-        file,
-        "-Backup",
-        path.join(folder, "LDFCL-previous.exe"),
-        "-Expected",
+      await fs.mkdir(attemptFolder);
+      const transaction: UpdateTransaction = {
+        schema: 1,
+        id: randomUUID(),
+        nonce: randomBytes(32).toString("hex"),
+        target: this.options.executable,
+        staged: file,
+        backup: path.join(attemptFolder, "LDFCL-previous.exe"),
         expected,
-        "-LauncherPid",
-        String(process.pid),
-      ];
-      if (this.options.launchHelper)
-        await this.options.launchHelper(helper, arguments_);
-      else
-        await new Promise<void>((resolve, reject) => {
-          const child = spawn(
-            path.join(
-              process.env.SystemRoot || "C:\\Windows",
-              "System32",
-              "WindowsPowerShell",
-              "v1.0",
-              "powershell.exe",
+        version: this.release!.version,
+        launcherPid: process.pid,
+        arguments:
+          this.options.restartArguments ||
+          process.argv
+            .slice(1)
+            .filter((arg) =>
+              /^--(?:user-data-dir|remote-debugging-port)=/.test(arg),
             ),
-            [
-              "-NoProfile",
-              "-NonInteractive",
-              "-ExecutionPolicy",
-              "Bypass",
-              "-WindowStyle",
-              "Hidden",
-              "-File",
-              helper,
-              ...arguments_,
-            ],
-            { detached: true, stdio: "ignore", windowsHide: true },
-          );
-          child.once("error", reject);
-          child.once("spawn", () => {
-            child.unref();
-            resolve();
-          });
-        });
+        exitTimeoutMs: 60000,
+        replaceTimeoutMs: 60000,
+        healthTimeoutMs: 90000,
+        healthGraceMs: 2000,
+        ...this.options.transactionTimeouts,
+      };
+      await fs.writeFile(transactionFile, JSON.stringify(transaction), {
+        flag: "wx",
+      });
+      await fs.writeFile(helper, "\ufeff" + UPDATE_HELPER, { flag: "wx" });
+      await writeJsonAtomic(
+        path.join(updateRoot(this.options.executable), "pending.json"),
+        {
+          id: transaction.id,
+          version: transaction.version,
+          target: transaction.target,
+          transactionFile,
+          startedAt: new Date().toISOString(),
+        },
+      );
+      if (this.options.launchHelper) {
+        await this.options.launchHelper(helper, [
+          "-Transaction",
+          transactionFile,
+        ]);
+        await waitHelperReady(transactionFile, transaction);
+      } else await launchUpdateHelper(helper, transactionFile, transaction);
       this.options.quit();
     } catch (error) {
-      if (helperCreated) await fs.unlink(helper).catch(() => {});
+      await fs
+        .writeFile(path.join(attemptFolder, "cancel"), "cancel")
+        .catch(() => {});
       this.set({
         status: "ready",
-        message: "无法启动更新助手，请重试或从 GitHub 下载。",
+        message: `更新助手未能就绪，当前程序保持运行。${error instanceof Error ? error.message : "请重试或从 GitHub 下载。"}`,
       });
       throw error;
     }

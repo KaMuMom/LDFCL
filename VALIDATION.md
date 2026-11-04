@@ -1,3 +1,15 @@
+# LDFCL 0.6.5：更新与快捷方式验证
+
+日期：2026-11-04（Asia/Hong_Kong）。实现范围见 [0.6.5](docs/0.6.5_RELEASE.md)。
+
+本轮验证脚本包括 `tests/updater.test.cjs`、`tests/desktop-shortcut.test.cjs`、`tests/desktop-shortcut-smoke.cjs`、`tests/launcher-update-popup-smoke.cjs`，以及最终便携 EXE 的启动、更新状态和恢复测试。真实跨版本替换使用隔离的 PowerShell 助手夹具验证；没有对 GitHub 发行文件执行实际下载和覆盖。准确测试数量、真实更新结果、ASAR 与源码独立重建结果以本次发行资产 `VALIDATION-0.6.5.md`、`verification.json` 和 `SHA256SUMS-0.6.5.txt` 为准。
+
+桌面链接测试使用 Windows 原生 Shell 与临时桌面，覆盖幂等、旧名称及默认图标迁移、确认重复链接清理、其他程序/安装/自定义参数保护。弹窗覆盖两种窗口尺寸与明暗主题、长文和所有更新状态，并验证初始旧快照不覆盖较新事件。更新测试区分助手就绪、文件替换、真实界面确认和失败回退，不再将创建进程等同于更新成功。
+
+个人安装与缓存仅作只读诊断，未修改 `C:\pcl`、真实桌面链接、账号或游戏文件。受控更新只运行 TEMP 副本；没有本轮真实 Microsoft 登录、在线皮肤或 Minecraft 游玩。下方为历史验证，不与本版数量合计。
+
+---
+
 # LDFCL 0.6.4：界面性能优化验证
 
 日期：2026-10-28（Asia/Hong_Kong）。实现范围见 [0.6.4](docs/0.6.4_RELEASE.md)。

@@ -1,6 +1,6 @@
 # LDFCL 当前功能与实现方式
 
-更新：2026-10-28，当前版本 **0.6.4**。本版面向入门电脑优化界面：默认流畅模式、按需 3D 皮肤渲染、页面延迟加载、后台事件合并，以及每页 50 项的 Mod/版本列表。保留旧实例自动关联、默认中文、Steve 和 GitHub 更新等功能。见 [性能与发行说明](0.6.4_RELEASE.md)、[0.6.3 说明](0.6.3_RELEASE.md)、[微软登录配置](0.6.2_BETA_LOGIN.md)、[启动修复](0.6.1_STARTUP_FIX.md)、[P0–P6](P0_P6_IMPLEMENTATION.md)、[CLI](CLI.md) 与 [验证记录](../VALIDATION.md)。
+更新：2026-11-04，当前版本 **0.6.5**。本版为更新助手增加启动与新版界面就绪确认、失败恢复和结果记录，维护固定桌面快捷方式，并将更新提示移到顶部弹出显示。保留 0.6.4 的默认流畅模式、按需皮肤渲染、分页和延迟加载，以及既有账号、游戏目录和资源功能。见 [更新修复说明](0.6.5_RELEASE.md)、[性能说明](0.6.4_RELEASE.md)、[0.6.3 说明](0.6.3_RELEASE.md)、[微软登录配置](0.6.2_BETA_LOGIN.md)、[启动修复](0.6.1_STARTUP_FIX.md)、[P0–P6](P0_P6_IMPLEMENTATION.md)、[CLI](CLI.md) 与 [验证记录](../VALIDATION.md)。
 
 ## 架构
 
@@ -23,7 +23,8 @@ React 调用 preload → Electron 注入 Host 的核心 → 文件/API/游戏进
 | 离线账号       | 本地生成稳定身份，快速切换；不提供正版权益                                                                                                                |
 | 其他皮肤站     | Yggdrasil 兼容认证；按需下载 authlib-injector 并以 Java agent 启动；不收集 Microsoft 密码                                                                 |
 | 账号生命周期   | 启动前刷新所需令牌、持久化和安全脱敏；旧账号/配置首次迁入保留原件；已有新目录不重导入已删除账号                                                           |
-| 程序更新       | 启动后检查 GitHub Latest 正式版本；校验大小与 SHA-256 下载；Windows x64 便携版退出替换、保留旧 EXE 和数据；设置内手动检查 |
+| 程序更新       | GitHub Latest 正式版检查及 SHA-256 下载；助手就绪后退出，等待外壳/文件锁、原位替换及新版 UI 确认，失败尝试回退；保存结果与日志；顶部提示及设置卡片 |
+| 桌面快捷方式   | Windows 便携版维护固定 LDFCL.lnk，指向外部 EXE；首次创建、后续幂等更新，只清理确认属于同一安装的旧重复链接 |
 | 多游戏根       | 注册、选择、重扫、打开和移除登记；移除登记保留文件；已有原版/Fabric/Forge/OptiFine 等版本可发现                                                           |
 | 版本隔离       | `.minecraft/assets`、`libraries` 共享；每版本在 `versions/<目录>` 使用独立 `mods/config/saves/resourcepacks/shaderpacks/options/logs`；校验目录与链接边界 |
 | Minecraft 安装 | 官方清单与校验和；Vanilla、Fabric、Quilt、Forge、NeoForge、OptiFine；隔离阶段安装避免覆盖既有世界；自动补库、assets、native                               |

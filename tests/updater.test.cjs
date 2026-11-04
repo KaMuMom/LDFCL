@@ -16,10 +16,23 @@ const {
   downloadUpdate,
   LauncherUpdater,
   UPDATE_HELPER,
+  waitHelperReady,
 } = require("../dist-electron/electron/updater.js");
 
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const payload = Buffer.from("MZ controlled update payload");
+async function acknowledgeHelper(_script, args) {
+  const file = args[1];
+  const transaction = JSON.parse(await fs.readFile(file, "utf8"));
+  await fs.writeFile(
+    path.join(path.dirname(file), "ready.json"),
+    JSON.stringify({
+      id: transaction.id,
+      nonce: transaction.nonce,
+      helperPid: process.pid,
+    }),
+  );
+}
 function releaseRaw(extra = {}) {
   return {
     tag_name: "v0.6.3",
@@ -225,6 +238,7 @@ test("portable updater downloads, checks install guard, then starts replacement 
     },
     launchHelper: async (script, args) => {
       helper = { script, args };
+      await acknowledgeHelper(script, args);
     },
   });
   await updater.check();
@@ -236,8 +250,11 @@ test("portable updater downloads, checks install guard, then starts replacement 
   await updater.install();
   assert.equal(quit, true);
   assert.equal(updater.state().status, "installing");
-  assert.equal(helper.args[0], "-Target");
-  assert.equal(helper.args[1], executable);
+  assert.equal(helper.args[0], "-Transaction");
+  const transaction = JSON.parse(await fs.readFile(helper.args[1], "utf8"));
+  assert.equal(transaction.target, executable);
+  assert.equal(transaction.version, "0.6.3");
+  assert.equal(transaction.nonce.length, 64);
   assert.equal(await fs.readFile(executable, "utf8"), "old");
 });
 test("non-portable update check allows release page without replacing any executable", async () => {
@@ -270,7 +287,7 @@ test("installing update cannot be overwritten by duplicate install, check or dow
     },
     fetchText: async () => JSON.stringify(releaseRaw()),
     download: async (_release, file) => fs.writeFile(file, payload),
-    launchHelper: async () => {},
+    launchHelper: acknowledgeHelper,
   });
   await updater.check();
   await updater.download();
@@ -304,117 +321,3 @@ test("same or older GitHub release never enables download even after a later che
   assert.equal(failed.status, "error");
   assert.equal(failed.hasUpdate, false);
 });
-
-async function runHelper(script, arguments_) {
-  await new Promise((resolve, reject) => {
-    const child = spawn(
-      path.join(
-        process.env.SystemRoot,
-        "System32",
-        "WindowsPowerShell",
-        "v1.0",
-        "powershell.exe",
-      ),
-      [
-        "-NoProfile",
-        "-NonInteractive",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-WindowStyle",
-        "Hidden",
-        "-File",
-        script,
-        ...arguments_,
-      ],
-      { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] },
-    );
-    let output = "";
-    child.stdout.on("data", (chunk) => (output += chunk));
-    child.stderr.on("data", (chunk) => (output += chunk));
-    child.on("error", reject);
-    child.on("exit", (code) =>
-      code === 0 ? resolve() : reject(Error(`PowerShell ${code}: ${output}`)),
-    );
-  });
-}
-test(
-  "Windows PowerShell 5.1 helper replaces only EXE and retains backup with special-character paths",
-  { skip: process.platform !== "win32" },
-  async (t) => {
-    const root = await temporary(t);
-    const folder = path.join(root, "中文 ' $ [update] & 空格");
-    await fs.mkdir(folder);
-    const target = path.join(folder, "LDFCL original.exe"),
-      staged = path.join(folder, "new.exe"),
-      backup = path.join(folder, "previous.exe"),
-      script = path.join(folder, "update.ps1");
-    await fs.writeFile(target, "original binary");
-    await fs.copyFile(
-      path.join(process.env.SystemRoot, "System32", "rundll32.exe"),
-      staged,
-    );
-    const bytes = await fs.readFile(staged);
-    await fs.writeFile(script, "\ufeff" + UPDATE_HELPER);
-    for (const name of [".minecraft", "LDFCL-data"]) {
-      await fs.mkdir(path.join(folder, name));
-      await fs.writeFile(path.join(folder, name, "keep"), name);
-    }
-    await runHelper(script, [
-      "-Target",
-      target,
-      "-Staged",
-      staged,
-      "-Backup",
-      backup,
-      "-Expected",
-      hash(bytes),
-      "-LauncherPid",
-      "2147483647",
-    ]);
-    assert.equal(hash(await fs.readFile(target)), hash(bytes));
-    assert.equal(await fs.readFile(backup, "utf8"), "original binary");
-    for (const name of [".minecraft", "LDFCL-data"])
-      assert.equal(
-        await fs.readFile(path.join(folder, name, "keep"), "utf8"),
-        name,
-      );
-    assert.match(
-      await fs.readFile(path.join(folder, "update.log"), "utf8"),
-      /Update installed/,
-    );
-  },
-);
-test(
-  "Windows replacement helper preserves original on checksum failure and rolls back failed restart",
-  { skip: process.platform !== "win32" },
-  async (t) => {
-    const root = await temporary(t);
-    for (const mismatch of [true, false]) {
-      const folder = path.join(root, String(mismatch));
-      await fs.mkdir(folder);
-      const target = path.join(folder, "launcher.exe"),
-        staged = path.join(folder, "new.exe"),
-        backup = path.join(folder, "previous.exe"),
-        script = path.join(folder, "update.ps1");
-      await fs.writeFile(target, "original binary");
-      await fs.writeFile(staged, payload);
-      await fs.writeFile(script, "\ufeff" + UPDATE_HELPER);
-      await runHelper(script, [
-        "-Target",
-        target,
-        "-Staged",
-        staged,
-        "-Backup",
-        backup,
-        "-Expected",
-        mismatch ? "0".repeat(64) : hash(payload),
-        "-LauncherPid",
-        "2147483647",
-      ]);
-      assert.equal(await fs.readFile(target, "utf8"), "original binary");
-      const log = await fs.readFile(path.join(folder, "update.log"), "utf8");
-      assert.ok(log.trim());
-      assert.doesNotMatch(log, /Update installed/);
-    }
-  },
-);

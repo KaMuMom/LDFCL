@@ -1,3 +1,12 @@
+export interface LauncherUpdateAttempt {
+  id: string;
+  status: "installed" | "failed" | "rolled-back";
+  version: string;
+  completedAt: string;
+  message: string;
+  logPath?: string;
+}
+
 export interface LauncherUpdateState {
   status:
     | "idle"
@@ -17,4 +26,5 @@ export interface LauncherUpdateState {
   receivedBytes?: number;
   totalBytes?: number;
   message?: string;
+  lastAttempt?: LauncherUpdateAttempt;
 }

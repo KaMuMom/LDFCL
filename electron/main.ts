@@ -15,6 +15,7 @@ import type { LauncherCore, LauncherCoreOptions } from "@ldfcl/core/launcher";
 import { resolveLauncherDataDirectory } from "@ldfcl/core/application-paths";
 import { resolveDefaultGameDirectoryPath } from "@ldfcl/core/game-directories";
 import { LauncherUpdater, RELEASE_PAGE } from "./updater";
+import { ensureDesktopShortcut } from "./desktop-shortcut";
 
 let win: BrowserWindow | null = null;
 let launcher: LauncherCore | undefined;
@@ -209,7 +210,24 @@ async function startLauncher() {
     if (process.env.LDFCL_DEV_URL)
       await win!.loadURL(process.env.LDFCL_DEV_URL);
     else await win!.loadFile(path.join(__dirname, "../../dist/index.html"));
-    if (!updaterScheduled) {
+    // A loaded HTML document can still have a missing or failed React chunk.
+    // A replacement is healthy only after the actual launcher UI has mounted.
+    if (app.isPackaged) {
+      const deadline = Date.now() + 15000;
+      let interfaceReady = false;
+      while (!quitting && win && !win.isDestroyed() && Date.now() < deadline) {
+        interfaceReady = await win.webContents.executeJavaScript(
+          'Boolean(document.querySelector(".app-shell"))',
+        );
+        if (interfaceReady) break;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      if (quitting || !win || win.isDestroyed()) return;
+      if (!interfaceReady)
+        throw Error("启动器界面未能加载，请重试或重新下载程序。");
+    }
+    const { autoCheck } = await updater.confirmStartup();
+    if (!updaterScheduled && autoCheck) {
       updaterScheduled = true;
       const timer = setTimeout(() => {
         if (!quitting) void updater.check();
@@ -227,17 +245,18 @@ app
   .whenReady()
   .then(() => {
     const portableFile = process.env.PORTABLE_EXECUTABLE_FILE;
+    const portableExecutable =
+      app.isPackaged &&
+      process.platform === "win32" &&
+      process.arch === "x64" &&
+      portableFile &&
+      path.isAbsolute(portableFile) &&
+      path.extname(portableFile).toLowerCase() === ".exe"
+        ? portableFile
+        : undefined;
     updater = new LauncherUpdater({
       currentVersion: app.getVersion(),
-      executable:
-        app.isPackaged &&
-        process.platform === "win32" &&
-        process.arch === "x64" &&
-        portableFile &&
-        path.isAbsolute(portableFile) &&
-        path.extname(portableFile).toLowerCase() === ".exe"
-          ? portableFile
-          : undefined,
+      executable: portableExecutable,
       emit(state) {
         if (win && !win.isDestroyed())
           win.webContents.send("launcher:event", {
@@ -260,6 +279,28 @@ app
         app.quit();
       },
     });
+    if (portableExecutable)
+      void ensureDesktopShortcut({
+        desktopDirectory: app.getPath("desktop"),
+        executablePath: portableExecutable,
+        shell,
+      })
+        .then((result) => {
+          if (
+            ["failed", "conflict", "invalid-executable"].includes(
+              result.status,
+            ) ||
+            result.warnings.length
+          )
+            console.warn(
+              "LDFCL desktop shortcut:",
+              result.message,
+              ...result.warnings,
+            );
+        })
+        .catch((error) =>
+          console.warn("LDFCL desktop shortcut:", publicError(error)),
+        );
     ipcMain.handle("launcher:call", async (event, method, payload) => {
       if (event.sender !== win?.webContents) throw Error("无效的调用来源");
       try {
