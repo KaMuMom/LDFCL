@@ -2,7 +2,7 @@
   "name": "@ldfcl/cli",
   "private": true,
   "license": "MIT",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "type": "commonjs",
   "main": "./dist/main.js",
   "types": "./dist/main.d.ts",
@@ -10,8 +10,8 @@
     "dist"
   ],
   "dependencies": {
-    "@ldfcl/contracts": "0.8.0",
-    "@ldfcl/core": "0.8.0"
+    "@ldfcl/contracts": "0.8.1",
+    "@ldfcl/core": "0.8.1"
   },
   "exports": {
     ".": {

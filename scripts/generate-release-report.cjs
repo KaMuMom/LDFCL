@@ -17,6 +17,18 @@ const required = (name, relative) => {
   return { file, report };
 };
 const reports = {
+  lighting: required(
+    "Skin color output",
+    "test-results/skin-lighting/after/report.json",
+  ),
+  packagedLighting: required(
+    "Packaged skin color output",
+    "test-results/skin-lighting/packaged/report.json",
+  ),
+  previewPerformance: required(
+    "Preview drawing lifecycle",
+    "test-results/skin-performance/report.json",
+  ),
   package: required("ASAR integrity", `release/${version}/package-report.json`),
   source: required(
     "Independent source build",
@@ -52,6 +64,11 @@ const assets = [exe, source].map((file) => ({
   sha256: hash(file),
 }));
 assert.equal(reports.package.report.version, version);
+assert.equal(reports.packagedLighting.report.applicationVersion, version);
+assert.equal(
+  reports.packagedLighting.report.asarSha256,
+  reports.package.report.asarSha256,
+);
 assert.equal(reports.relocation.report.executable.sha256, assets[0].sha256);
 assert.equal(reports.recovery.report.executableSha256, assets[0].sha256);
 assert.equal(reports.source.report.archive.sha256, assets[1].sha256);
@@ -142,7 +159,7 @@ fs.writeFileSync(
   path.join(dir, "verification.json"),
   JSON.stringify(result, null, 2) + "\n",
 );
-const text = `# LDFCL ${version} 最终验证\n\n生成于 ${result.createdAt}。本地源码及运行包通过以下检查。\n\n| 检查 | 结果 |\n| --- | --- |\n| 完整核心测试 | ${unitTests.passed}/${unitTests.total}，失败/跳过/取消均为 0 |\n| 真实 React 工作区 | ${evidence.modernUI.checks} 组交互、${reports.modernUI.report.screenshots.length} 张界面状态，无错误/溢出 |\n| 导航与事件 | ${evidence.events.checks} 组 |\n| 受控 Electron 登录 | ${evidence.login.checks} 组 |\n| Electron 启动恢复 | ${evidence.startup.checks} 个场景 |\n| 未修改便携 EXE | ${result.portable.normalStartups} 次正常启动/关闭、${result.portable.relocations} 次整目录搬迁 |\n| 旧实例/中文/更新状态 | ${evidence.recovery.checks} 组 |\n| ASAR 完整性 | ${reports.package.report.files} 个文件、${reports.package.report.blocks} 个完整性块 |\n| 源码归档 | ${reports.source.report.archiveAudit.files} 个文件，无账号/世界/依赖/编译输出 |\n| 独立重建 | 4 个 workspace 包，离线缓存安装，从无关目录构建及运行 CLI |\n\n精确源码由源码 ZIP 的 SHA-256 标识；详细证据及执行环境见同目录 verification.json 和各项报告。\n\n${result.limitations.map((line) => "- " + line).join("\n")}\n`;
+const text = `# LDFCL ${version} 最终验证\n\n生成于 ${result.createdAt}。本地源码及运行包通过以下检查。\n\n| 检查 | 结果 |\n| --- | --- |\n| 预览像素颜色 | ${reports.lighting.report.samples.length} 个浏览器场景、${reports.packagedLighting.report.samples.length} 个成品场景，各验证两种模式 |\n| 预览绘制生命周期 | ${evidence.previewPerformance.checks} 组，首页和衣橱静止零绘制 |\n| 完整核心测试 | ${unitTests.passed}/${unitTests.total}，失败/跳过/取消均为 0 |\n| 真实 React 工作区 | ${evidence.modernUI.checks} 组交互、${reports.modernUI.report.screenshots.length} 张界面状态，无错误/溢出 |\n| 导航与事件 | ${evidence.events.checks} 组 |\n| 受控 Electron 登录 | ${evidence.login.checks} 组 |\n| Electron 启动恢复 | ${evidence.startup.checks} 个场景 |\n| 未修改便携 EXE | ${result.portable.normalStartups} 次正常启动/关闭、${result.portable.relocations} 次整目录搬迁 |\n| 旧实例/中文/更新状态 | ${evidence.recovery.checks} 组 |\n| ASAR 完整性 | ${reports.package.report.files} 个文件、${reports.package.report.blocks} 个完整性块 |\n| 源码归档 | ${reports.source.report.archiveAudit.files} 个文件，无账号/世界/依赖/编译输出 |\n| 独立重建 | 4 个 workspace 包，离线缓存安装，从无关目录构建及运行 CLI |\n\n精确源码由源码 ZIP 的 SHA-256 标识；详细证据及执行环境见同目录 verification.json 和各项报告。\n\n${result.limitations.map((line) => "- " + line).join("\n")}\n`;
 fs.writeFileSync(path.join(dir, `VALIDATION-${version}.md`), text);
 const checksumFiles = [
   exe,

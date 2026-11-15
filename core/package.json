@@ -1,6 +1,6 @@
 {
   "name": "@ldfcl/core",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": true,
   "description": "Host-independent Minecraft launcher services for LDFCL",
   "license": "MIT",
@@ -30,7 +30,7 @@
     "check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@ldfcl/contracts": "0.8.0",
+    "@ldfcl/contracts": "0.8.1",
     "adm-zip": "^0.5.16"
   },
   "devDependencies": {

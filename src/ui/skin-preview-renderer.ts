@@ -1,4 +1,6 @@
 import type { SkinViewer } from "skinview3d";
+import { ColorManagement, NoToneMapping, SRGBColorSpace } from "three";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 
 const FRAME_INTERVAL = 1000 / 60;
 
@@ -14,6 +16,20 @@ export function manageSkinPreview(
   element: HTMLElement,
 ): SkinPreviewRenderer {
   viewer.renderPaused = true;
+  // Skin PNGs are sRGB. skinview3d 3.4 creates untagged textures and disables
+  // color management; direct rendering would then brighten those bytes again.
+  ColorManagement.enabled = true;
+  viewer.renderer.outputColorSpace = SRGBColorSpace;
+  viewer.renderer.toneMapping = NoToneMapping;
+  viewer.renderer.toneMappingExposure = 1;
+  viewer.globalLight.intensity = 1.4;
+  viewer.cameraLight.intensity = 1.8;
+  viewer.cameraLight.decay = 0;
+  viewer.cameraLight.position.set(-30, 45, 25);
+  // The quality path renders into linear targets. Convert once before FXAA,
+  // which expects display-space colors; efficient mode stays a single draw.
+  const outputPass = new OutputPass();
+  viewer.composer.insertPass(outputPass, 1);
   let disposed = false;
   let frame = 0;
   let dirty = true;
@@ -90,6 +106,18 @@ export function manageSkinPreview(
         viewer.playerWrapper.rotation.y += delta * viewer.autoRotateSpeed;
     }
     viewer.controls.update();
+    // Loading/editing a skin or cape replaces its texture. Tag the replacement
+    // before its first upload, without altering source PNGs or their pixels.
+    for (const texture of [
+      viewer.playerObject.skin.map,
+      viewer.playerObject.cape.map,
+      viewer.playerObject.ears.map,
+    ]) {
+      if (texture && texture.colorSpace !== SRGBColorSpace) {
+        texture.colorSpace = SRGBColorSpace;
+        texture.needsUpdate = true;
+      }
+    }
     if (quality) viewer.render();
     else {
       viewer.renderer.setRenderTarget(null);
@@ -185,6 +213,7 @@ export function manageSkinPreview(
       // leaves the composer's WebGL render targets and FXAA material allocated.
       viewer.composer.dispose();
       viewer.fxaaPass.material.dispose();
+      outputPass.dispose();
     },
   };
 }
