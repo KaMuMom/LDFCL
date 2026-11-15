@@ -1,8 +1,8 @@
-import path from "node:path";
 import type {
   DownloadFilePage,
   DownloadFileProgress,
-} from "../../shared/types";
+} from "@ldfcl/contracts/types";
+import path from "node:path";
 
 // Keep detailed lists out of progress events: a vanilla asset index can contain
 // tens of thousands of files. The renderer fetches a bounded page on demand.

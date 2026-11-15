@@ -183,7 +183,7 @@ const selected = (await f.core.state()).selectedInstanceId;
 await f.core.call('select', { instanceId: selected, accountId: account.id });
 const disk = JSON.parse(await fs.readFile(path.join(f.dataDir, 'launcher.json'), 'utf8'));
 assert.deepEqual(Object.keys(disk).sort(), [
-  'instances', 'gameDirectories', 'selectedGameDirectoryId',
+  'instances', 'gameDirectories', 'pathBindings', 'selectedGameDirectoryId',
   'selectedInstancesByDirectory', 'settings', 'selectedInstanceId', 'selectedAccountId'
 ].sort());
 assert.equal(disk.selectedAccountId, account.id);

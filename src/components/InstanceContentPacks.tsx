@@ -8,7 +8,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import type { Instance, LauncherAPI } from "../../shared/types";
+import type { Instance, LauncherAPI } from "@ldfcl/contracts/types";
 import "./instance-content-packs.css";
 
 type Kind = "resourcepack" | "shader";

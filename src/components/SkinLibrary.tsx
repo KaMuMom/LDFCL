@@ -10,7 +10,7 @@ import {
   Upload,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { Account, SkinLibraryEntry } from "../../shared/types";
+import type { Account, SkinLibraryEntry } from "@ldfcl/contracts/types";
 import { GlassSurface } from "../ui/Glass";
 import Modal from "../ui/Modal";
 import "./skin-library.css";

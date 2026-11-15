@@ -9,7 +9,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { LauncherAPI, State } from "../../shared/types";
+import type { LauncherAPI, State } from "@ldfcl/contracts/types";
 import { errorMessage } from "../ui/format";
 import Modal from "../ui/Modal";
 function MicrosoftDeviceStatus({

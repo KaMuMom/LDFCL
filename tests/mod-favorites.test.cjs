@@ -3,11 +3,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
-const compiledRoot =
-  process.env.LDFCL_TEST_COMPILED_ROOT ||
-  path.join(__dirname, "..", "core", "dist");
 const { ModFavorites } = require(
-  path.join(compiledRoot, "core/services/mod-favorites.js"),
+  require.resolve("@ldfcl/core/services/mod-favorites"),
 );
 async function fixture(t) {
   const root = await fs.mkdtemp(

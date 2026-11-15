@@ -12,8 +12,8 @@ const assert = require("node:assert/strict");
 const { spawn, spawnSync } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const AdmZip = require("adm-zip");
-const { prepareJavaLaunch } = require("../core/dist/core/services/java-launch.js");
-const { GameService } = require("../core/dist/core/services/game.js");
+const { prepareJavaLaunch } = require("@ldfcl/core/services/java-launch");
+const { GameService } = require("@ldfcl/core/services/game");
 
 const source = `import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -59,8 +59,9 @@ function options() {
     if (key === "--java") values.java.push(value);
     else values[key.slice(2)] = value;
   }
-  if (!values.java.length && process.platform === "win32") {
-    const folder = path.join(process.env.ProgramFiles || "C:\\Program Files", "Java");
+  if (!values.java.length && process.platform === "win32" && process.env.ProgramFiles) {
+    const folder = path.join(process.env.ProgramFiles, "Java");
+    if (nativeFs.existsSync(folder))
     for (const name of nativeFs.readdirSync(folder)) {
       const java = path.join(folder, name, "bin", "java.exe");
       if (nativeFs.existsSync(java) && !/latest/i.test(name)) values.java.push(java);
@@ -133,7 +134,10 @@ async function main() {
         await fs.writeFile(library, dependencyJar.toBuffer());
         const agent = path.join(data, "agent.jar");
         await fs.writeFile(agent, agentJar.toBuffer());
-        if (process.platform === "win32") await fs.copyFile(path.join(process.env.SystemRoot || "C:\\Windows", "System32", "version.dll"), path.join(natives, "ldfcl_probe.dll"));
+        if (process.platform === "win32") {
+          assert(process.env.SystemRoot || process.env.windir, "Windows system directory is unavailable");
+          await fs.copyFile(path.join(process.env.SystemRoot || process.env.windir, "System32", "version.dll"), path.join(natives, "ldfcl_probe.dll"));
+        }
         const classpath = [client, library];
         if (scenario === "long-classpath") {
           const libraries = path.join(gameRoot, "libraries");

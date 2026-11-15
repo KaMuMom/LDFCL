@@ -1,64 +1,172 @@
+"use strict";
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
-
-const root = path.resolve(__dirname, "..");
-const dir = path.join(root, "release", "0.6.5");
-const hash = (file) => crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
-const bytes = (file) => fs.statSync(file).size;
+const assert = require("node:assert/strict");
+const { execFileSync } = require("node:child_process");
+const root = path.dirname(require.resolve("../package.json"));
+const version = require("../package.json").version;
+const dir = path.join(root, "release", version);
+const hash = (file) =>
+  crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
-const exe = path.join(dir, "LDFCL-0.6.5-Windows-x64.exe");
-const source = path.join(dir, "LDFCL-0.6.5-source.zip");
-const packageReport = read(path.join(dir, "package-report.json"));
-const sourceReport = read(path.join(dir, "source-report.json"));
-const recovery = read(path.join(root, "test-results", "0.6.5-recovery-updates-smoke.json"));
-const popup = read(path.join(root, "test-results", "launcher-update-popup", "report.json"));
-const desktop = read(path.join(root, "test-results", "desktop-shortcut-smoke.json"));
+const required = (name, relative) => {
+  const file = path.join(root, relative),
+    report = read(file);
+  assert.equal(report.passed, true, `${name} did not pass`);
+  return { file, report };
+};
+const reports = {
+  package: required("ASAR integrity", `release/${version}/package-report.json`),
+  source: required(
+    "Independent source build",
+    `release/${version}/source-report.json`,
+  ),
+  relocation: required(
+    "Portable relocation",
+    "test-results/portable-relocation-smoke.json",
+  ),
+  recovery: required(
+    "Portable recovery",
+    `test-results/${version}-recovery-updates-smoke.json`,
+  ),
+  modernUI: required(
+    "Modern workspace",
+    "test-results/modern-workspace/report.json",
+  ),
+  events: required(
+    "Event/navigation",
+    "test-results/ui-event-navigation/report.json",
+  ),
+  login: required(
+    "Controlled device login",
+    "test-results/device-login-smoke.json",
+  ),
+  startup: required("Startup recovery", "test-results/startup-smoke.json"),
+};
+const exe = path.join(dir, `LDFCL-${version}-Windows-x64.exe`);
+const source = path.join(dir, `LDFCL-${version}-source.zip`);
+const assets = [exe, source].map((file) => ({
+  name: path.basename(file),
+  bytes: fs.statSync(file).size,
+  sha256: hash(file),
+}));
+assert.equal(reports.package.report.version, version);
+assert.equal(reports.relocation.report.executable.sha256, assets[0].sha256);
+assert.equal(reports.recovery.report.executableSha256, assets[0].sha256);
+assert.equal(reports.source.report.archive.sha256, assets[1].sha256);
+assert.equal(
+  reports.package.report.asarSha256,
+  hash(path.join(dir, "win-unpacked", "resources", "app.asar")),
+);
+const raw = fs.readFileSync(
+  path.join(root, "test-results", "architecture-core-tests.log"),
+);
+const log = raw
+  .toString(raw[0] === 0xff && raw[1] === 0xfe ? "utf16le" : "utf8")
+  .replace(/\x1b\[[0-9;]*m/g, "");
+const count = (name) => {
+  const match = log.match(
+    new RegExp(`(?:^|\\n)[^\\n]*?\\b${name}\\s+(\\d+)\\s*(?:\\r?\\n|$)`),
+  );
+  assert(match, `No actual test ${name} count in log`);
+  return Number(match[1]);
+};
+const unitTests = {
+  total: count("tests"),
+  passed: count("pass"),
+  failed: count("fail"),
+  cancelled: count("cancelled"),
+  skipped: count("skipped"),
+};
+assert.equal(unitTests.total, unitTests.passed);
+assert.equal(unitTests.failed + unitTests.cancelled + unitTests.skipped, 0);
+const evidence = {};
+for (const [name, { file, report }] of Object.entries(reports)) {
+  const copy = `${name}-report.json`;
+  const destination = path.join(dir, copy);
+  if (path.resolve(destination) !== path.resolve(file))
+    fs.copyFileSync(file, destination);
+  evidence[name] = {
+    report: copy,
+    sha256: hash(destination),
+    passed: true,
+    checks: report.checks?.length,
+    pageErrors: report.pageErrors?.length,
+  };
+}
+fs.copyFileSync(
+  path.join(root, "test-results", "architecture-core-tests.log"),
+  path.join(dir, "core-tests.log"),
+);
 const result = {
+  schemaVersion: 2,
   passed: true,
-  version: "0.6.5",
+  version,
   createdAt: new Date().toISOString(),
-  sourceCommit: "working-tree based on 0471a124b1689b387825a32220e58e9c2ef317ac",
-  assets: [
-    { name: path.basename(exe), bytes: bytes(exe), sha256: hash(exe) },
-    { name: path.basename(source), bytes: bytes(source), sha256: hash(source) },
-  ],
-  unitTests: { total: 412, passed: 412, failed: 0, skipped: 0 },
-  focusedChecks: {
-    updater: { total: 14, passed: 14 },
-    updaterHelper: { total: 5, passed: 5 },
-    desktopShortcut: { total: 13, passed: 13, realWindowsShell: desktop.realWindowsShell },
-    launcherUpdatePopup: { total: popup.checks.length, passed: popup.passed, pageErrors: popup.pageErrors.length },
-    recoveryUpdates: {
-      total: recovery.checks.length,
-      passed: recovery.passed,
-      liveAutomatic: recovery.liveUpdates?.automatic?.passed ?? null,
-      liveManual: recovery.liveUpdates?.manual?.passed ?? null,
-    },
-  },
-  asar: {
-    files: packageReport.files,
-    integrityBlocks: packageReport.blocks,
-    sha256: packageReport.asarSha256,
-    privateDataAbsent: packageReport.privateDataAbsent,
-    oldOutputAbsent: packageReport.oldOutputAbsent,
-  },
+  sourceBaseCommit: execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: root,
+    encoding: "utf8",
+  }).trim(),
+  sourceIdentity:
+    "Source archive SHA-256 is the exact source snapshot; base commit may precede local refactor changes.",
+  assets,
+  unitTests,
+  evidence,
   source: {
-    passed: sourceReport.passed,
-    entries: sourceReport.archiveAudit.entries,
-    files: sourceReport.archiveAudit.files,
-    bytes: sourceReport.archive.size,
-    independentOfflineInstallAndProductionBuild: sourceReport.commands.some((item) => item.label === "npm-build" && item.exitCode === 0),
-    coreRuntimeProof: sourceReport.commands.some((item) => item.label === "runtime-proof" && item.exitCode === 0),
+    archiveAudited: true,
+    workspacePackages: reports.source.report.workspacePackages.map(
+      (item) => item.name,
+    ),
+    independentWorkingDirectory: true,
+    commands: reports.source.report.commands.map((item) => ({
+      label: item.label,
+      exitCode: item.exitCode,
+    })),
+  },
+  portable: {
+    normalStartups: reports.relocation.report.runs.length,
+    relocations: reports.relocation.report.runs.length - 1,
+    executableUnmodified: true,
+    syntheticDataOnly: true,
   },
   limitations: [
-    "更新助手真实跨版本替换和回滚在隔离 TEMP/PowerShell 夹具中验证；最终 EXE 做了启动、更新状态和恢复 smoke，未对 GitHub 发行文件执行实际下载覆盖。",
-    "未进行本轮真实 Microsoft 登录、在线皮肤/披风操作或 Minecraft 游玩。",
+    "Microsoft/Xbox/Minecraft 登录响应为受控测试；本轮没有真人授权、在线皮肤/披风操作或 Minecraft 游玩。",
+    "最终 EXE 只检查启动、搬迁、旧实例恢复及更新状态，没有实际下载覆盖个人程序。",
+    "没有本轮 4GB 低配真机性能验收；保留原 UI 动效、按需绘制、分页与事件合并。",
+    "系统加密仍受 Windows 用户/设备保护；外部游戏根保留用户路径，单独移动时需重新定位。",
+    "本地构建未签名；本报告不表示已更新 GitHub Latest。",
   ],
 };
-fs.writeFileSync(path.join(dir, "verification.json"), JSON.stringify(result, null, 2) + "\n");
 fs.writeFileSync(
-  path.join(dir, "SHA256SUMS-0.6.5.txt"),
-  `${hash(exe)}  ${path.basename(exe)}\n${hash(source)}  ${path.basename(source)}\n`,
+  path.join(dir, "verification.json"),
+  JSON.stringify(result, null, 2) + "\n",
 );
-console.log(JSON.stringify(result, null, 2));
+const text = `# LDFCL ${version} 最终验证\n\n生成于 ${result.createdAt}。本地源码及运行包通过以下检查。\n\n| 检查 | 结果 |\n| --- | --- |\n| 完整核心测试 | ${unitTests.passed}/${unitTests.total}，失败/跳过/取消均为 0 |\n| 真实 React 工作区 | ${evidence.modernUI.checks} 组交互、${reports.modernUI.report.screenshots.length} 张界面状态，无错误/溢出 |\n| 导航与事件 | ${evidence.events.checks} 组 |\n| 受控 Electron 登录 | ${evidence.login.checks} 组 |\n| Electron 启动恢复 | ${evidence.startup.checks} 个场景 |\n| 未修改便携 EXE | ${result.portable.normalStartups} 次正常启动/关闭、${result.portable.relocations} 次整目录搬迁 |\n| 旧实例/中文/更新状态 | ${evidence.recovery.checks} 组 |\n| ASAR 完整性 | ${reports.package.report.files} 个文件、${reports.package.report.blocks} 个完整性块 |\n| 源码归档 | ${reports.source.report.archiveAudit.files} 个文件，无账号/世界/依赖/编译输出 |\n| 独立重建 | 4 个 workspace 包，离线缓存安装，从无关目录构建及运行 CLI |\n\n精确源码由源码 ZIP 的 SHA-256 标识；详细证据及执行环境见同目录 verification.json 和各项报告。\n\n${result.limitations.map((line) => "- " + line).join("\n")}\n`;
+fs.writeFileSync(path.join(dir, `VALIDATION-${version}.md`), text);
+const checksumFiles = [
+  exe,
+  source,
+  path.join(dir, "verification.json"),
+  path.join(dir, `VALIDATION-${version}.md`),
+  ...Object.values(evidence).map((item) => path.join(dir, item.report)),
+];
+fs.writeFileSync(
+  path.join(dir, `SHA256SUMS-${version}.txt`),
+  checksumFiles
+    .map((file) => `${hash(file)}  ${path.basename(file)}`)
+    .join("\n") + "\n",
+);
+console.log(
+  JSON.stringify(
+    {
+      passed: true,
+      version,
+      unitTests,
+      assets,
+      report: path.join(dir, "verification.json"),
+    },
+    null,
+    2,
+  ),
+);

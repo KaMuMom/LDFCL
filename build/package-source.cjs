@@ -8,7 +8,6 @@ const files = [
   "package.json",
   "package-lock.json",
   "tsconfig.json",
-  "tsconfig.electron.json",
   "vite.config.ts",
   "index.html",
   ".gitignore",
@@ -31,7 +30,11 @@ for (const directory of [
   "tests",
   "docs",
 ])
-  zip.addLocalFolder(path.join(root, directory), directory);
+  zip.addLocalFolder(
+    path.join(root, directory),
+    directory,
+    (entry) => !/(?:^|[\\/])(?:dist|node_modules)(?:[\\/]|$)/.test(entry),
+  );
 zip.addLocalFolder(
   path.join(root, "core"),
   "core",

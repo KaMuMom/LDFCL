@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Download, Package, RefreshCw, X } from "lucide-react";
-import type { Instance } from "../../shared/types";
+import type { Instance } from "@ldfcl/contracts/types";
 import { GlassBackdrop } from "../ui/Glass";
 import "./resources.css";
 import "./ModInstallPicker.css";

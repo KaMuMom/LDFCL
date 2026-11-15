@@ -11,12 +11,13 @@ const { createHash } = require("node:crypto");
   const project = path.resolve(__dirname, "..");
   let main = path.resolve(
     process.env.LDFCL_TEST_STARTUP_MAIN ||
-      path.join(project, "dist-electron/electron/main.js"),
+      require.resolve("@ldfcl/desktop"),
   );
   const workspace = await fs.mkdtemp(
     path.join(os.tmpdir(), "LDFCL-startup-qa-"),
   );
   let productionSourceArchive;
+  let resourcesRoot = project;
   if (process.env.LDFCL_TEST_STARTUP_ASAR) {
     const archive = path.resolve(process.env.LDFCL_TEST_STARTUP_ASAR),
       extracted = path.join(workspace, "packaged-source"),
@@ -26,9 +27,9 @@ const { createHash } = require("node:crypto");
     asar.extractAll(archive, extracted);
     const files = [];
     for (const relative of [
-      "dist-electron/electron/main.js",
-      "dist-electron/electron/preload.js",
-      "node_modules/@ldfcl/core/dist/core/launcher.js",
+      "node_modules/@ldfcl/desktop/dist/main.js",
+      "node_modules/@ldfcl/desktop/dist/preload.js",
+      "node_modules/@ldfcl/core/dist/launcher.js",
       "dist/index.html",
     ]) {
       const original = asar.extractFile(archive, path.normalize(relative)),
@@ -40,7 +41,8 @@ const { createHash } = require("node:crypto");
       );
       files.push({ path: relative, sha256: sha256(original) });
     }
-    main = path.join(extracted, "dist-electron/electron/main.js");
+    main = path.join(extracted, "node_modules/@ldfcl/desktop/dist/main.js");
+    resourcesRoot = extracted;
     productionSourceArchive = {
       path: archive,
       sha256: sha256(await fs.readFile(archive)),
@@ -71,6 +73,7 @@ const { createHash } = require("node:crypto");
     await fs.writeFile(
       path.join(harness, "bootstrap.cjs"),
       `
+      require('electron').app.setAppPath(${JSON.stringify(resourcesRoot)});
       const fs = require('node:fs');
       const Module = require('node:module');
       const mode = ${JSON.stringify(mode)};

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Download, Layers3, RefreshCw, X } from "lucide-react";
-import type { ModpackVersion } from "../../shared/types";
+import type { ModpackVersion } from "@ldfcl/contracts/types";
 import { GlassBackdrop } from "../ui/Glass";
 import "./resources.css";
 

@@ -24,7 +24,6 @@ const ROOT_FILES = new Set([
   "package.json",
   "package-lock.json",
   "tsconfig.json",
-  "tsconfig.electron.json",
   "vite.config.ts",
   "index.html",
   ".gitignore",
@@ -53,7 +52,7 @@ const FORBIDDEN_FILES =
   /^(?:accounts|launcher|launcher_accounts(?:_microsoft_store)?|launcher_profiles|ai-settings|ai-secrets|credentials?|tokens)\.(?:json|xml|dat)$|^\.env(?:\.|$)|^\.npmrc$|^id_(?:rsa|ed25519)(?:\.|$)|\.(?:pem|pfx|p12|key|exe|dll|msi|asar|jar|class|zip|7z)$/i;
 const report = {
   schemaVersion: 1,
-  check: "p0-p6-independent-source-rebuild",
+  check: "independent-source-rebuild",
   startedAt: new Date().toISOString(),
   passed: false,
   workspace,
@@ -171,6 +170,12 @@ function auditArchive(archive) {
   for (const required of [
     "package.json",
     "package-lock.json",
+    "shared/package.json",
+    "shared/tsconfig.json",
+    "cli/package.json",
+    "cli/tsconfig.json",
+    "electron/package.json",
+    "electron/tsconfig.json",
     "core/package.json",
     "core/tsconfig.json",
     "core/index.ts",
@@ -408,12 +413,6 @@ async function dependencyProof(sourceDirectory) {
   const rootManifest = JSON.parse(
     await fs.readFile(path.join(sourceDirectory, "package.json"), "utf8"),
   );
-  const coreManifest = JSON.parse(
-    await fs.readFile(
-      path.join(sourceDirectory, "core", "package.json"),
-      "utf8",
-    ),
-  );
   for (const name of Object.keys({
     ...rootManifest.dependencies,
     ...rootManifest.devDependencies,
@@ -436,22 +435,28 @@ async function dependencyProof(sourceDirectory) {
       manifestRealPath: real,
     });
   }
-  const coreLink = await fs.realpath(
-    path.join(sourceDirectory, "node_modules", "@ldfcl", "core"),
-  );
-  assert(
-    coreLink === (await fs.realpath(path.join(sourceDirectory, "core"))),
-    "Workspace core link does not point into independent checkout",
-  );
-  const coreRequire = createRequire(
-    path.join(sourceDirectory, "core", "package.json"),
-  );
-  for (const name of Object.keys(coreManifest.dependencies || {})) {
-    const real = await fs.realpath(coreRequire.resolve(name));
-    assert(
-      contained(sourceDirectory, real),
-      `Core dependency escaped independent checkout: ${name}`,
+  report.workspacePackages = [];
+  for (const directory of rootManifest.workspaces) {
+    const manifestFile = path.join(sourceDirectory, directory, "package.json");
+    const manifest = JSON.parse(await fs.readFile(manifestFile, "utf8"));
+    const real = await fs.realpath(
+      path.join(sourceDirectory, "node_modules", manifest.name),
     );
+    assert(
+      real === (await fs.realpath(path.join(sourceDirectory, directory))),
+      `Workspace link escaped independent checkout: ${manifest.name}`,
+    );
+    const localRequire = createRequire(manifestFile);
+    for (const name of Object.keys(manifest.dependencies || {})) {
+      const dependency = await fs.realpath(
+        localRequire.resolve(`${name}/package.json`),
+      );
+      assert(
+        contained(sourceDirectory, dependency),
+        `Package dependency escaped independent checkout: ${name}`,
+      );
+    }
+    report.workspacePackages.push({ name: manifest.name, realPath: real });
   }
   async function inspect(directory) {
     for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
@@ -468,22 +473,23 @@ async function dependencyProof(sourceDirectory) {
     }
   }
   await inspect(path.join(sourceDirectory, "node_modules"));
-  report.workspaceCoreRealPath = coreLink;
 }
 async function verifyOutputs(sourceDirectory) {
   for (const relative of [
     "dist/index.html",
-    "dist-electron/electron/main.js",
-    "dist-electron/cli/main.js",
-    "dist-electron/cli/commands.js",
-    "core/dist/core/index.js",
-    "core/dist/core/index.d.ts",
-    "core/dist/core/launcher.js",
-    "core/dist/core/services/content-store.js",
-    "core/dist/core/services/instance-manifest.js",
-    "core/dist/core/services/snapshots.js",
-    "core/dist/core/services/health.js",
-    "core/dist/core/services/crash-diagnostics.js",
+    "electron/dist/main.js",
+    "cli/dist/main.js",
+    "cli/dist/commands.js",
+    "shared/dist/types.js",
+    "shared/dist/commands.js",
+    "core/dist/index.js",
+    "core/dist/index.d.ts",
+    "core/dist/launcher.js",
+    "core/dist/services/content-store.js",
+    "core/dist/services/instance-manifest.js",
+    "core/dist/services/snapshots.js",
+    "core/dist/services/health.js",
+    "core/dist/services/crash-diagnostics.js",
   ]) {
     const file = path.join(sourceDirectory, ...relative.split("/")),
       real = await fs.realpath(file),
@@ -525,9 +531,11 @@ async function main() {
     audit = auditArchive(archive);
   report.archiveAudit = audit.summary;
   const temporaryRoot = await fs.mkdtemp(
-    path.join(os.tmpdir(), "LDFCL-P0-P6-source-rebuild-"),
+    path.join(os.tmpdir(), "LDFCL-source-rebuild-"),
   );
-  const sourceDirectory = path.join(temporaryRoot, "clean-source");
+  const sourceDirectory = path.join(temporaryRoot, "独立源码 空格");
+  const unrelatedCwd = path.join(temporaryRoot, "无关的工作目录");
+  await fs.mkdir(unrelatedCwd);
   report.temporaryRoot = temporaryRoot;
   report.sourceDirectory = sourceDirectory;
   assert(
@@ -549,17 +557,18 @@ async function main() {
   );
   await dependencyProof(sourceDirectory);
   await run(
-    "npm-build",
+    "independent-build",
     process.execPath,
-    [npmCli, "run", "build"],
-    sourceDirectory,
+    [path.join(sourceDirectory, "scripts", "project.cjs"), "build"],
+    unrelatedCwd,
     env,
     temporaryRoot,
   );
   await verifyOutputs(sourceDirectory);
   const runtimeProbe = `
     const path=require('node:path'),fs=require('node:fs'),Module=require('node:module');
-    const root=fs.realpathSync(process.cwd());
+    const root=fs.realpathSync(process.argv[1]);
+    const localRequire=Module.createRequire(path.join(root,'package.json'));
     function inside(file){const rel=path.relative(root,fs.realpathSync(file));return !rel||(!rel.startsWith('..'+path.sep)&&rel!=='..'&&!path.isAbsolute(rel));}
     const original=Module._resolveFilename;let loaded=0;
     Module._resolveFilename=function(request,...args){
@@ -568,19 +577,38 @@ async function main() {
       if(path.isAbsolute(resolved)){if(!inside(resolved))throw Error('Module escaped clean checkout');loaded++;}
       return resolved;
     };
-    const core=require('@ldfcl/core');
+    const core=localRequire('@ldfcl/core');
     if(typeof core.createLauncherCore!=='function'||typeof core.InstanceStorageService!=='function'||typeof core.SnapshotService!=='function')throw Error('Core exports incomplete');
-    process.stdout.write(JSON.stringify({cwd:root,core:fs.realpathSync(require.resolve('@ldfcl/core')),admZip:fs.realpathSync(require.resolve('adm-zip')),loaded,externalModuleLoads:0,electronLoaded:false}));
+    process.stdout.write(JSON.stringify({cwd:process.cwd(),root,core:fs.realpathSync(localRequire.resolve('@ldfcl/core')),admZip:fs.realpathSync(localRequire.resolve('adm-zip')),loaded,externalModuleLoads:0,electronLoaded:false}));
   `;
   const proof = await run(
     "runtime-proof",
     process.execPath,
-    ["-e", runtimeProbe],
-    sourceDirectory,
+    ["-e", runtimeProbe, sourceDirectory],
+    unrelatedCwd,
     env,
     temporaryRoot,
   );
   report.runtimeProof = JSON.parse(proof);
+  const cliOutput = await run(
+    "cli-unrelated-cwd",
+    process.execPath,
+    [
+      path.join(sourceDirectory, "bin", "ldfcl-cli.cjs"),
+      "instance",
+      "list",
+      "--json",
+    ],
+    unrelatedCwd,
+    env,
+    temporaryRoot,
+  );
+  report.cliProof = JSON.parse(cliOutput);
+  assert(
+    (await fs.readdir(unrelatedCwd)).length === 0,
+    "CLI wrote into the unrelated working directory",
+  );
+  report.unrelatedWorkingDirectory = unrelatedCwd;
   report.passed = true;
 }
 

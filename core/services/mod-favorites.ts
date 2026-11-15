@@ -1,7 +1,7 @@
+import type { FavoriteMod } from "@ldfcl/contracts/types";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
-import type { FavoriteMod } from "../../shared/types";
 
 const MAX_BYTES = 2 * 1024 * 1024;
 const MAX_ITEMS = 1000;

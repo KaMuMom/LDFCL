@@ -16,7 +16,7 @@ import type {
   Instance,
   LauncherAPI,
   OptifineVersion,
-} from "../../shared/types";
+} from "@ldfcl/contracts/types";
 import { GlassSurface } from "../ui/Glass";
 import Tabs from "../ui/Tabs";
 import ContentBrowser, { type ContentKind } from "./ContentBrowser";

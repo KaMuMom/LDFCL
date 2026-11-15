@@ -25,8 +25,8 @@ import { SkinViewer, WalkingAnimation } from "skinview3d";
 import {
   DEFAULT_SKIN_NAME,
   defaultSkinTexture,
-} from "../../shared/default-skin";
-import type { Account, SkinLibraryEntry } from "../../shared/types";
+} from "@ldfcl/contracts/default-skin";
+import type { Account, SkinLibraryEntry } from "@ldfcl/contracts/types";
 import { GlassBackdrop, GlassSurface } from "../ui/Glass";
 import Modal from "../ui/Modal";
 import {

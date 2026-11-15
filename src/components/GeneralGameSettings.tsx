@@ -1,6 +1,6 @@
 import { SlidersHorizontal } from "lucide-react";
-import type { Settings } from "../../shared/types";
-import { GAME_OPTION_DEFAULTS } from "../../shared/game-settings";
+import type { Settings } from "@ldfcl/contracts/types";
+import { GAME_OPTION_DEFAULTS } from "@ldfcl/contracts/game-settings";
 import GameOptionsFields from "./GameOptionsFields";
 import { GlassSurface } from "../ui/Glass";
 import "./game-options.css";

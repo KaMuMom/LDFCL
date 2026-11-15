@@ -3,24 +3,21 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const os = require("node:os");
-const compiledRoot =
-  process.env.LDFCL_TEST_COMPILED_ROOT ||
-  path.join(__dirname, "..", "core", "dist");
 const {
   instanceVersionDirectoryId,
   instanceGameDirectory,
   assertInstanceGameDirectory,
   allocateVersionDirectory,
   prepareInstanceDirectories,
-} = require(path.join(compiledRoot, "core", "instance-paths.js"));
+} = require(require.resolve("@ldfcl/core/instance-paths"));
 const { scanGameDirectory } = require(
-  path.join(compiledRoot, "core", "game-directories.js"),
+  require.resolve("@ldfcl/core/game-directories"),
 );
 const { GameService } = require(
-  path.join(compiledRoot, "core", "services", "game.js"),
+  require.resolve("@ldfcl/core/services/game"),
 );
 const { DownloadManager } = require(
-  path.join(compiledRoot, "core", "services", "downloads.js"),
+  require.resolve("@ldfcl/core/services/downloads"),
 );
 
 function directory(root, layout = "standard") {

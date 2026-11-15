@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Activity, RefreshCw, Wrench } from "lucide-react";
-import type { LauncherAPI } from "../../shared/types";
-import type { HealthReport } from "../../shared/health";
+import type { LauncherAPI } from "@ldfcl/contracts/types";
+import type { HealthReport } from "@ldfcl/contracts/health";
 import "./improvements.css";
 
 export default function HealthPanel({

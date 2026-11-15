@@ -17,7 +17,7 @@ const AdmZip = require("adm-zip");
   const project = path.resolve(__dirname, "..");
   const source = path.resolve(
     process.env.LDFCL_TEST_PORTABLE_EXE ||
-      path.join(project, "release/0.6.3/LDFCL-0.6.3-Windows-x64.exe"),
+      path.join(project, "release", require("../package.json").version, `LDFCL-${require("../package.json").version}-Windows-x64.exe`),
   );
   const label = process.env.LDFCL_PERF_LABEL || "baseline";
   assert(/^[a-z0-9.-]+$/i.test(label), "Invalid report label");

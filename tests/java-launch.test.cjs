@@ -6,9 +6,8 @@ const path = require("node:path");
 const os = require("node:os");
 const { createHash } = require("node:crypto");
 const AdmZip = require("adm-zip");
-const compiledRoot = process.env.LDFCL_TEST_COMPILED_ROOT || path.join(__dirname, "..", "core", "dist");
-const { prepareJavaLaunch, manifestClasspath } = require(path.join(compiledRoot, "core", "services", "java-launch.js"));
-const bytecode = require(path.join(compiledRoot, "core", "services", "java-bootstrap-bytecode.js"));
+const { prepareJavaLaunch, manifestClasspath } = require(require.resolve("@ldfcl/core/services/java-launch"));
+const bytecode = require(require.resolve("@ldfcl/core/services/java-bootstrap-bytecode"));
 
 async function fixture(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "ldfcl-launch-test-"));
@@ -120,12 +119,12 @@ test("a synchronous child creation failure releases the bridge and records a rea
   const client = path.join(game, `${id}.jar`);
   await fs.writeFile(client, "unchanged-client");
   await fs.writeFile(path.join(game, `${id}.json`), JSON.stringify({ id, mainClass: "game.Main", libraries: [], arguments: { game: ["--gameDir", "${game_directory}"] } }));
-  const bridge = require(path.join(compiledRoot, "core", "services", "java-launch.js"));
+  const bridge = require(require.resolve("@ldfcl/core/services/java-launch"));
   const original = bridge.prepareJavaLaunch;
   let invocation;
   t.mock.method(bridge, "prepareJavaLaunch", async (input) => { invocation = await original(input); return invocation; });
   t.mock.method(require("node:child_process"), "spawn", () => { throw Error("injected synchronous child creation failure"); });
-  const { GameService } = require(path.join(compiledRoot, "core", "services", "game.js"));
+  const { GameService } = require(require.resolve("@ldfcl/core/services/game"));
   const events = [];
   const service = new GameService(root, (event) => events.push(event), { minecraftRoot: root });
   service.java.ensure = async () => "fixture-java.exe";

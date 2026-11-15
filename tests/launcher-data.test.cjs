@@ -3,11 +3,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
-const compiledRoot =
-  process.env.LDFCL_TEST_COMPILED_ROOT ||
-  path.join(__dirname, "..", "core", "dist");
 const { prepareLauncherDataDirectory } = require(
-  path.join(compiledRoot, "core", "launcher-data.js"),
+  require.resolve("@ldfcl/core/launcher-data"),
 );
 
 async function fixture(t) {

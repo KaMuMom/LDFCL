@@ -6,11 +6,11 @@ import {
   useRef,
   useState,
 } from "react";
-import type { State, Task } from "../../shared/types";
+import type { State, Task } from "@ldfcl/contracts/types";
 import type { ResourceKind } from "../components/ResourceDownloads";
 import type { PageId } from "../app/navigation";
-import { LAUNCHER_VERSION } from "../../shared/launcher";
-import { createUiEventBuffer } from "../../shared/ui-event-buffer";
+import { LAUNCHER_VERSION } from "@ldfcl/contracts/launcher";
+import { createUiEventBuffer } from "@ldfcl/contracts/ui-event-buffer";
 import { useLauncherUpdates } from "../components/LauncherUpdates";
 import { errorMessage } from "../ui/format";
 const empty: State = {

@@ -11,7 +11,7 @@ const {
 } = require("@ldfcl/core/services/downloads");
 const {
   taskProgressPercent,
-} = require("../dist-electron/shared/task-progress.js");
+} = require("@ldfcl/contracts/task-progress");
 const digest = (algorithm, value) =>
   createHash(algorithm).update(value).digest("hex");
 async function fixture(t, handler) {

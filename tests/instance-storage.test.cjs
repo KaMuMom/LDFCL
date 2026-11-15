@@ -4,21 +4,18 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const os = require("node:os");
 const { spawnSync } = require("node:child_process");
-const compiledRoot =
-  process.env.LDFCL_TEST_COMPILED_ROOT ||
-  path.join(__dirname, "..", "core", "dist");
 const {
   ContentStore,
   sha256File,
   storagePath,
   ensurePrivateFile,
   withInstanceStorageLock,
-} = require(path.join(compiledRoot, "core/services/content-store.js"));
+} = require(require.resolve("@ldfcl/core/services/content-store"));
 const { InstanceStorageService, validateInstanceManifest } = require(
-  path.join(compiledRoot, "core/services/instance-manifest.js"),
+  require.resolve("@ldfcl/core/services/instance-manifest"),
 );
 const { SnapshotService } = require(
-  path.join(compiledRoot, "core/services/snapshots.js"),
+  require.resolve("@ldfcl/core/services/snapshots"),
 );
 
 async function put(root, relative, value) {
@@ -503,7 +500,7 @@ test("a killed restore process recovers its durable journal before the next oper
     [
       "-e",
       `
-    const {SnapshotService}=require(${JSON.stringify(path.join(compiledRoot, "core/services/snapshots.js"))});
+    const {SnapshotService}=require(${JSON.stringify(require.resolve("@ldfcl/core/services/snapshots"))});
     const service=new SnapshotService({dataDir:${JSON.stringify(f.dataDir)},minecraftRoot:${JSON.stringify(f.minecraftRoot)},onTransactionStep:async step=>{if(step===1)process.exit(73)}});
     service.restore(${JSON.stringify(f.dir)},${JSON.stringify(snapshot.id)}).catch(error=>{console.error(error);process.exitCode=1});
   `,

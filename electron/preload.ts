@@ -1,5 +1,5 @@
+import type { LauncherAPI } from "@ldfcl/contracts/types";
 import { contextBridge, ipcRenderer } from "electron";
-import type { LauncherAPI } from "../shared/types";
 const api: LauncherAPI = {
   call: (method, payload) =>
     ipcRenderer.invoke("launcher:call", method, payload),

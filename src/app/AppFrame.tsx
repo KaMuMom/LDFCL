@@ -8,7 +8,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
-import type { Account } from "../../shared/types";
+import type { Account } from "@ldfcl/contracts/types";
 import { NAVIGATION, type PageId } from "./navigation";
 
 export default function AppFrame({

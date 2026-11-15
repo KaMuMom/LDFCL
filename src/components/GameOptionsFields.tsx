@@ -1,5 +1,5 @@
-import type { Instance } from "../../shared/types";
-import { GAME_OPTION_DEFAULTS } from "../../shared/game-settings";
+import type { Instance } from "@ldfcl/contracts/types";
+import { GAME_OPTION_DEFAULTS } from "@ldfcl/contracts/game-settings";
 import "./game-options.css";
 
 type Props = {

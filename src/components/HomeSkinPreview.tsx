@@ -1,8 +1,8 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { IdleAnimation, SkinViewer } from "skinview3d";
 import { ChevronDown, Pause, Play, RefreshCw, UserRound } from "lucide-react";
-import type { Account, LauncherAPI } from "../../shared/types";
-import { defaultSkinTexture } from "../../shared/default-skin";
+import type { Account, LauncherAPI } from "@ldfcl/contracts/types";
+import { defaultSkinTexture } from "@ldfcl/contracts/default-skin";
 import { GlassSurface } from "../ui/Glass";
 import {
   manageSkinPreview,

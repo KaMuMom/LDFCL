@@ -1,4 +1,4 @@
-import type { Instance, Settings } from "./types";
+import type { Instance, Settings } from "./types.js";
 
 export const GAME_OPTION_DEFAULTS: Instance["gameSettings"] = {
   renderDistance: 12,

@@ -1,4 +1,4 @@
-import type { Task } from "./types";
+import type { Task } from "./types.js";
 
 export interface UiEventBatch {
   tasks: Record<string, Task>;

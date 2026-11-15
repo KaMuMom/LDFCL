@@ -1,7 +1,7 @@
 import { Info, LoaderCircle, X } from "lucide-react";
 import { lazy, memo, Suspense, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import type { LauncherAPI } from "../shared/types";
+import type { LauncherAPI } from "@ldfcl/contracts/types";
 import AppFrame from "./app/AppFrame";
 import type { Destination, SettingsSection } from "./app/navigation";
 import LauncherUpdates from "./components/LauncherUpdates";

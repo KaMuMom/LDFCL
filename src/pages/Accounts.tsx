@@ -9,7 +9,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useState } from "react";
-import type { Account } from "../../shared/types";
+import type { Account } from "@ldfcl/contracts/types";
 import type useLauncher from "../hooks/useLauncher";
 import { GlassSurface } from "../ui/Glass";
 import Modal from "../ui/Modal";

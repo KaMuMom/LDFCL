@@ -1,7 +1,7 @@
+import type { OptifineVersion } from "@ldfcl/contracts/types";
+import AdmZip from "adm-zip";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import AdmZip from "adm-zip";
-import type { OptifineVersion } from "../../shared/types";
 import { safeGameVersionId } from "../game-directories";
 import { assertPlainTree } from "../instance-paths";
 import { DownloadManager, type Emit, fileHash, requestJson } from "./downloads";

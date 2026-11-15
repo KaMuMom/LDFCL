@@ -11,10 +11,21 @@ assert(
   "Usage: node scripts/verify-package.cjs [application-directory] [absolute-report.json]",
 );
 const directory = path.resolve(
-  process.argv[2] || path.join(root, "release/p0-p6/win-unpacked"),
+  process.argv[2] ||
+    path.join(
+      root,
+      "release",
+      require("../package.json").version,
+      "win-unpacked",
+    ),
 );
 const reportFile =
-  process.argv[3] || path.join(root, "test-results/p0-p6-package-audit.json");
+  process.argv[3] ||
+  path.join(
+    root,
+    "test-results",
+    `${require("../package.json").version}-package-audit.json`,
+  );
 const archive = path.join(directory, "resources/app.asar");
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 // @electron/asar traverses directories with path.sep, including on Windows.
@@ -69,14 +80,15 @@ function compareTree(localDirectory, prefix) {
   }
 }
 compareTree(path.join(root, "dist"), "dist");
-compareTree(path.join(root, "dist-electron"), "dist-electron");
-compareTree(path.join(root, "core/dist"), "node_modules/@ldfcl/core/dist");
+for (const pkg of require("../build/workspace.cjs").packages()) {
+  compareTree(path.join(pkg.root, "dist"), `node_modules/${pkg.name}/dist`);
+  assert.equal(
+    JSON.parse(extract(`node_modules/${pkg.name}/package.json`)).version,
+    pkg.version,
+  );
+}
 assert(
-  !entries.some((file) =>
-    /^(?:dist-electron\/electron\/services|dist-electron\/core)(?:\/|$)/.test(
-      file,
-    ),
-  ),
+  !entries.some((file) => /^dist-electron(?:\/|$)/.test(file)),
   "old business output bundled",
 );
 assert(

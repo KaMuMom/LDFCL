@@ -17,7 +17,7 @@ const {
   LauncherUpdater,
   UPDATE_HELPER,
   waitHelperReady,
-} = require("../dist-electron/electron/updater.js");
+} = require("@ldfcl/desktop/updater");
 
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const payload = Buffer.from("MZ controlled update payload");

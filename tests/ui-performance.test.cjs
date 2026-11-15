@@ -4,7 +4,7 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const { Store, validateSettings } = require("@ldfcl/core/store");
-const { createUiEventBuffer } = require("@ldfcl/core/shared/ui-event-buffer");
+const { createUiEventBuffer } = require("@ldfcl/contracts/ui-event-buffer");
 
 test("interface mode defaults safely for new and invalid legacy settings and persists a user choice", async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ldfcl-ui-mode-"));

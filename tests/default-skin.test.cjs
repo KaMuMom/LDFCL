@@ -3,11 +3,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
-const compiledRoot =
-  process.env.LDFCL_TEST_COMPILED_ROOT ||
-  path.join(__dirname, "..", "core", "dist");
 const { DEFAULT_SKIN_NAME, defaultSkinTexture } = require(
-  path.join(compiledRoot, "shared", "default-skin.js"),
+  require.resolve("@ldfcl/contracts/default-skin"),
 );
 
 test("default preview uses the unchanged bundled official Steve template without a network URL", async () => {

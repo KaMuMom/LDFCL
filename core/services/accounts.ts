@@ -1,3 +1,4 @@
+import type { Account } from "@ldfcl/contracts/types";
 import {
   createHash,
   randomBytes,
@@ -5,9 +6,8 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import { createServer, type Server, type ServerResponse } from "node:http";
-import type { Account } from "../../shared/types";
+import * as path from "node:path";
 import type { SecretStorage } from "../ports";
 import { AccountLifecycle, type AccountLease } from "./accountLifecycle";
 

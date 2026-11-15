@@ -11,7 +11,7 @@ node .\bin\ldfcl-cli.cjs --help
 node .\bin\ldfcl-cli.cjs --version --json
 ```
 
-编译入口为 `dist-electron/cli/main.js`，`bin/ldfcl-cli.cjs` 是启动文件。完成 npm 本地链接或安装相应包后也可使用 npm bin 名 `ldfcl-cli`。下方示例从源码项目根目录执行；含中文和空格的路径加引号。
+编译入口为独立包 `@ldfcl/cli`（`cli/dist/main.js`），`bin/ldfcl-cli.cjs` 通过公开包接口启动，并将根程序目录传给 CLI。默认目录不取决于执行命令时的工作目录。完成 npm 本地链接或安装相应包后也可使用 npm bin 名 `ldfcl-cli`。下方示例从源码项目根目录执行；含中文和空格的路径加引号。
 
 ## 路径、输出与并发边界
 

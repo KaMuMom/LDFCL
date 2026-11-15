@@ -1,21 +1,31 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import os from "node:os";
-import { createHash } from "node:crypto";
+import { GAME_PRESETS } from "@ldfcl/contracts/game-presets";
+import {
+  GAME_OPTION_DEFAULTS,
+  validateGameOptions,
+} from "@ldfcl/contracts/game-settings";
+import { validateExtraJvmArguments } from "@ldfcl/contracts/jvm-arguments";
+import { LAUNCHER_VERSION } from "@ldfcl/contracts/launcher";
 import type {
   GameDirectory,
   Instance,
   MicrosoftClientIdStorageStatus,
   Settings,
-} from "../shared/types";
-import type { SecretStorage } from "./ports";
-import { LAUNCHER_VERSION } from "../shared/launcher";
+} from "@ldfcl/contracts/types";
+import { createHash } from "node:crypto";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import {
-  GAME_OPTION_DEFAULTS,
-  validateGameOptions,
-} from "../shared/game-settings";
-import { validateExtraJvmArguments } from "../shared/jvm-arguments";
-import { GAME_PRESETS } from "../shared/game-presets";
+  basesMoved,
+  configurationBindings,
+  pathReference,
+  rebaseHistoricalPath,
+  resolveConfigurationPaths,
+  resolvePathReference,
+  validBases,
+  type PathBases,
+} from "./portable-paths";
+import type { SecretStorage } from "./ports";
 export const defaults: Settings = {
   downloadConcurrency: 8,
   memoryMode: "auto",
@@ -75,6 +85,9 @@ export class Store {
   private readonly defaultGameRoot: string;
   private readonly legacyDataDir: string;
   private readonly secretStorage?: SecretStorage;
+  private readonly pathBases: PathBases;
+  private pathHistory: PathBases[] = [];
+  hadDefaultGameDirectory = false;
   // True private fields keep IDs out of accidental JSON serialization of Store.
   #microsoftClientValue = "";
   #microsoftClientRecord: unknown;
@@ -87,6 +100,7 @@ export class Store {
       defaultGameRoot?: string;
       legacyDataDir?: string;
       secretStorage?: SecretStorage;
+      programDir?: string;
     } = {},
   ) {
     this.dir = path.resolve(dir);
@@ -95,6 +109,31 @@ export class Store {
     );
     this.legacyDataDir = path.resolve(options.legacyDataDir ?? this.dir);
     this.secretStorage = options.secretStorage;
+    this.pathBases = {
+      data: this.dir,
+      game: this.defaultGameRoot,
+      ...(options.programDir
+        ? { program: path.resolve(options.programDir) }
+        : {}),
+    };
+  }
+
+  portableJavaPath(value: string | undefined) {
+    const reference = pathReference(value, this.pathBases);
+    return reference ? { ...reference, origin: this.pathBases } : undefined;
+  }
+  restoreJavaPath(value: string, reference?: unknown): string {
+    if (
+      reference &&
+      typeof reference === "object" &&
+      "origin" in reference &&
+      validBases(reference.origin) &&
+      !basesMoved(reference.origin, this.pathBases)
+    )
+      return value;
+    return reference
+      ? (resolvePathReference(value, reference, this.pathBases) as string)
+      : rebaseHistoricalPath(value, this.pathHistory, this.pathBases);
   }
 
   private secureStorageAvailable(): boolean {
@@ -257,6 +296,15 @@ export class Store {
               this.selectedInstancesByDirectory,
             ),
             settings: persistedSettings,
+            pathBindings: configurationBindings(
+              {
+                instances: this.instances,
+                gameDirectories: this.gameDirectories,
+                settings: persistedSettings,
+              },
+              this.pathBases,
+              this.pathHistory,
+            ),
             selectedInstanceId: this.selectedInstanceId,
             selectedAccountId: this.selectedAccountId,
             ...(record === undefined
@@ -517,6 +565,19 @@ export class Store {
         );
       }
     }
+    const located = await resolveConfigurationPaths(data, this.pathBases);
+    data = located.data;
+    this.pathHistory = located.history;
+    this.hadDefaultGameDirectory =
+      Array.isArray(data.gameDirectories) &&
+      data.gameDirectories.some(
+        (directory: any) =>
+          directory?.isDefault ||
+          (typeof directory?.path === "string" &&
+            path.isAbsolute(directory.path) &&
+            this.directoryKey(directory.path) ===
+              this.directoryKey(this.defaultGameRoot)),
+      );
     this.instances = Array.isArray(data.instances)
       ? data.instances.filter(
           (instance: any) => instance && typeof instance.id === "string",

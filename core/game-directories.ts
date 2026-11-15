@@ -1,7 +1,8 @@
+import type { GameDirectory, Instance } from "@ldfcl/contracts/types";
+import { createHash, randomUUID } from "node:crypto";
 import { constants, promises as fs } from "node:fs";
 import path from "node:path";
-import { createHash, randomUUID } from "node:crypto";
-import type { GameDirectory, Instance } from "../shared/types";
+import { resolveProgramDirectory } from "./application-paths";
 
 export interface DefaultGameDirectoryOptions {
   isPackaged: boolean;
@@ -26,11 +27,7 @@ export function resolveDefaultGameDirectoryPath(
   if (options.gameRootOverride) return absolutePath(options.gameRootOverride);
   if (options.dataDirOverride)
     return path.join(absolutePath(options.dataDirOverride), ".minecraft");
-  const base = options.isPackaged
-    ? options.portableExecutableDir
-      ? absolutePath(options.portableExecutableDir)
-      : path.dirname(absolutePath(options.execPath))
-    : absolutePath(options.appPath);
+  const base = resolveProgramDirectory(options);
   return path.join(base, ".minecraft");
 }
 

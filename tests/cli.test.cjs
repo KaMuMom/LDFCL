@@ -8,7 +8,7 @@ const { spawn } = require("node:child_process");
 
 const root = path.resolve(__dirname, "..");
 const bin = path.join(root, "bin", "ldfcl-cli.cjs");
-const compiled = path.join(root, "dist-electron", "cli", "main.js");
+const compiled = require.resolve("@ldfcl/cli");
 
 async function put(filename, contents) {
   await fs.mkdir(path.dirname(filename), { recursive: true });

@@ -6,17 +6,14 @@ const path = require("node:path");
 const http = require("node:http");
 const { createHash } = require("node:crypto");
 const AdmZip = require("adm-zip");
-const compiledRoot =
-  process.env.LDFCL_TEST_COMPILED_ROOT ||
-  path.join(__dirname, "..", "core", "dist");
 const { rulesAllow, tokenizeArguments, expandArguments, mavenPath } = require(
-  path.join(compiledRoot, "core/services/game.js"),
+  require.resolve("@ldfcl/core/services/game"),
 );
 const { JavaManager, javaMajor, automaticMemoryMb, safeExtractZip } = require(
-  path.join(compiledRoot, "core/services/java.js"),
+  require.resolve("@ldfcl/core/services/java"),
 );
 const { DownloadManager, fileHash } = require(
-  path.join(compiledRoot, "core/services/downloads.js"),
+  require.resolve("@ldfcl/core/services/downloads"),
 );
 
 test("Mojang OS rules preserve ordering and distinguish x86 from x64", () => {

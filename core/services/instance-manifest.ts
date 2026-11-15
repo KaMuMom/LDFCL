@@ -1,26 +1,26 @@
-import fs from "node:fs/promises";
-import { constants } from "node:fs";
-import path from "node:path";
-import { createHash, randomUUID } from "node:crypto";
-import type { Instance } from "../../shared/types";
 import type {
   InstanceManifest,
-  StoredFile,
   StorageDiff,
   StorageStats,
-} from "../../shared/instance-storage";
+  StoredFile,
+} from "@ldfcl/contracts/instance-storage";
+import type { Instance } from "@ldfcl/contracts/types";
+import { createHash, randomUUID } from "node:crypto";
+import { constants } from "node:fs";
+import fs from "node:fs/promises";
+import path from "node:path";
 import {
+  atomicStorageJson,
   ContentStore,
   pathExists,
+  readStorageJson,
+  replaceStorageFile,
   safeDirectory,
   safeFile,
-  storageRelative,
-  storagePath,
   sha256File,
-  atomicStorageJson,
-  readStorageJson,
+  storagePath,
+  storageRelative,
   withInstanceStorageLock,
-  replaceStorageFile,
 } from "./content-store";
 
 export const MANIFEST_FILE = ".ldfcl/manifest.json";

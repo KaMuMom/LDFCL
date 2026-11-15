@@ -1,22 +1,17 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import os from "node:os";
-import { randomUUID } from "node:crypto";
-import { spawn, ChildProcess } from "node:child_process";
-import AdmZip from "adm-zip";
-import type { Instance, Account, Settings } from "../../shared/types";
-import { LAUNCHER_VERSION } from "../../shared/launcher";
+import type { DiagnosisMod } from "@ldfcl/contracts/diagnostics";
 import {
   GAME_OPTION_DEFAULTS,
   effectiveGameOptions,
-} from "../../shared/game-settings";
-import { validateExtraJvmArguments } from "../../shared/jvm-arguments";
-import { CrashDiagnostics } from "./crash-diagnostics";
-import { prepareJavaLaunch } from "./java-launch";
-import { readModMetadata } from "./mod-metadata";
-import type { DiagnosisMod } from "../../shared/diagnostics";
-import { installOptifine, optifineVersions } from "./optifine";
-import { neoforgeArtifact, neoforgeVersions } from "./neoforge";
+} from "@ldfcl/contracts/game-settings";
+import { validateExtraJvmArguments } from "@ldfcl/contracts/jvm-arguments";
+import { LAUNCHER_VERSION } from "@ldfcl/contracts/launcher";
+import type { Account, Instance, Settings } from "@ldfcl/contracts/types";
+import AdmZip from "adm-zip";
+import { ChildProcess, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { safeGameVersionId } from "../game-directories";
 import {
   allocateVersionDirectory,
@@ -25,26 +20,31 @@ import {
   instanceGameDirectory,
   instanceVersionDirectoryId,
 } from "../instance-paths";
+import { CrashDiagnostics } from "./crash-diagnostics";
 import {
-  DownloadManager,
   DownloadItem,
+  DownloadManager,
   Emit,
-  requestJson,
   fileHash,
-  type DownloadPlan,
+  requestJson,
   type DownloadContext,
+  type DownloadPlan,
 } from "./downloads";
 import {
   JavaManager,
   automaticMemoryMb,
-  safeExtractZip,
   runProcess,
+  safeExtractZip,
 } from "./java";
+import { prepareJavaLaunch } from "./java-launch";
 import {
   nativeClassifier,
   nativeExtractionAllowed,
   prepareJvmArguments,
 } from "./launch-preparation";
+import { readModMetadata } from "./mod-metadata";
+import { neoforgeArtifact, neoforgeVersions } from "./neoforge";
+import { installOptifine, optifineVersions } from "./optifine";
 
 const MANIFEST =
   "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";

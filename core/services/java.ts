@@ -1,9 +1,10 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import os from "node:os";
-import { randomUUID } from "node:crypto";
-import { spawn } from "node:child_process";
 import AdmZip from "adm-zip";
+import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { javaSearchRoots } from "../platform-paths";
 import { DownloadManager, Emit, requestJson } from "./downloads";
 import {
   compatibleJavaArchitecture,
@@ -179,27 +180,7 @@ export class JavaManager {
           ),
         );
     }
-    const roots = [
-      path.join(this.dataDir, "runtime"),
-      path.join(process.env.ProgramFiles || "C:\\Program Files", "Java"),
-      path.join(
-        process.env.ProgramFiles || "C:\\Program Files",
-        "Eclipse Adoptium",
-      ),
-      path.join(process.env.ProgramFiles || "C:\\Program Files", "Microsoft"),
-      path.join(
-        process.env.ProgramFiles || "C:\\Program Files",
-        "Amazon Corretto",
-      ),
-      path.join(process.env.ProgramFiles || "C:\\Program Files", "Zulu"),
-      path.join(process.env.ProgramFiles || "C:\\Program Files", "BellSoft"),
-      path.join(os.homedir(), ".jdks"),
-      path.join(os.homedir(), ".jabba", "jdk"),
-      path.join(os.homedir(), "scoop", "apps", "temurin-jdk"),
-      ...(process.env.APPDATA
-        ? [path.join(process.env.APPDATA, ".minecraft", "runtime")]
-        : []),
-    ];
+    const roots = javaSearchRoots(this.dataDir, os.homedir());
     for (const root of roots) {
       for (const candidate of await this.runtimeCandidates(root, 3))
         candidates.add(candidate);

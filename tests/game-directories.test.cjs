@@ -7,9 +7,6 @@ const { createHash } = require("node:crypto");
 const { EventEmitter } = require("node:events");
 const { PassThrough } = require("node:stream");
 const { captureJavaStdin, decodedJavaInvocation, physicalPath } = require("./helpers/java-invocation.cjs");
-const compiledRoot =
-  process.env.LDFCL_TEST_COMPILED_ROOT ||
-  path.join(__dirname, "..", "core", "dist");
 const {
   resolveDefaultGameDirectoryPath,
   canonicalGameDirectoryPath,
@@ -17,9 +14,9 @@ const {
   gameDirectoryRoots,
   scanGameDirectory,
   safeGameVersionId,
-} = require(path.join(compiledRoot, "core", "game-directories.js"));
+} = require(require.resolve("@ldfcl/core/game-directories"));
 const { GameService, tokenizeArguments } = require(
-  path.join(compiledRoot, "core", "services", "game.js"),
+  require.resolve("@ldfcl/core/services/game"),
 );
 
 const base = {

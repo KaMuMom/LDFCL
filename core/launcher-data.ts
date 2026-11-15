@@ -1,6 +1,6 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
 
 type PreparedData = { legacyDataDir?: string };
 const CONFIG_LIMIT = 16 * 1024 * 1024;

@@ -8,7 +8,7 @@ const { PassThrough } = require("node:stream");
 const {
   validateGameOptions,
   effectiveGameOptions,
-} = require("../dist-electron/shared/game-settings.js");
+} = require("@ldfcl/contracts/game-settings");
 const {
   Store,
   validateSettings,

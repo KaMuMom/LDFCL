@@ -15,12 +15,7 @@ const { spawn } = require("node:child_process");
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "LDFCL-real-shortcut-"));
   const runner = path.join(root, "shortcut-runner.cjs");
   const report = path.join(root, "report.json");
-  const helper = path.join(
-    project,
-    "dist-electron",
-    "electron",
-    "desktop-shortcut.js",
-  );
+  const helper = require.resolve("@ldfcl/desktop/desktop-shortcut");
   const source = `
 const { app, shell } = require("electron");
 const fs = require("node:fs/promises");

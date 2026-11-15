@@ -1,5 +1,5 @@
-import type { Instance } from "./types";
-import { GAME_OPTION_DEFAULTS } from "./game-settings";
+import { GAME_OPTION_DEFAULTS } from "./game-settings.js";
+import type { Instance } from "./types.js";
 
 export const GAME_PRESETS: Record<
   string,

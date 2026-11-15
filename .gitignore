@@ -14,3 +14,7 @@ accounts.json
 launcher.json
 credential.xml
 core/dist/
+
+shared/dist/
+cli/dist/
+electron/dist/

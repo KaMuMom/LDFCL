@@ -13,10 +13,10 @@ const {
 const {
   GAME_PRESETS,
   gamePreset,
-} = require("../dist-electron/shared/game-presets.js");
+} = require("@ldfcl/contracts/game-presets");
 const {
   validateGameOptions,
-} = require("../dist-electron/shared/game-settings.js");
+} = require("@ldfcl/contracts/game-settings");
 async function fixture(t, loader = "fabric") {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "LDFCL-packs-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));

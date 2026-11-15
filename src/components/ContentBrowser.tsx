@@ -14,7 +14,7 @@ import {
   Star,
   WandSparkles,
 } from "lucide-react";
-import type { FavoriteMod, Instance } from "../../shared/types";
+import type { FavoriteMod, Instance } from "@ldfcl/contracts/types";
 import ModpackVersionPicker from "./ModpackVersionPicker";
 import ModInstallPicker from "./ModInstallPicker";
 import { GlassSurface } from "../ui/Glass";

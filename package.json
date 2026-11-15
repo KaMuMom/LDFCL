@@ -1,20 +1,21 @@
 {
   "name": "ldfcl",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "description": "LDFCL — Liquid Dream Fabric Craft Launcher",
   "author": "LDFCL Contributors",
   "license": "MIT",
-  "main": "dist-electron/electron/main.js",
+  "main": "bin/ldfcl-desktop.cjs",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "npm run build:main && tsc -p tsconfig.json && vite build",
+    "build": "node scripts/project.cjs build",
     "start": "electron .",
-    "dist": "npm run build && electron-builder --win portable --x64",
-    "test": "npm run build:main && node --test tests/*.test.cjs",
-    "build:core": "tsc -p core/tsconfig.json",
-    "build:main": "node scripts/clean-main.cjs && npm run build:core && tsc -p tsconfig.electron.json",
-    "cli": "node bin/ldfcl-cli.cjs"
+    "dist": "node scripts/project.cjs dist",
+    "test": "node scripts/project.cjs test",
+    "build:core": "node scripts/project.cjs build:core",
+    "build:main": "node scripts/project.cjs build:main",
+    "cli": "node bin/ldfcl-cli.cjs",
+    "check:architecture": "node scripts/check-architecture.cjs"
   },
   "dependencies": {
     "adm-zip": "^0.5.16",
@@ -24,7 +25,10 @@
     "react-dom": "^19.0.0",
     "skinview-utils": "^0.7.1",
     "skinview3d": "^3.4.2",
-    "@ldfcl/core": "0.7.0"
+    "@ldfcl/core": "0.8.0",
+    "@ldfcl/contracts": "0.8.0",
+    "@ldfcl/cli": "0.8.0",
+    "@ldfcl/desktop": "0.8.0"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.7",
@@ -48,7 +52,6 @@
     },
     "files": [
       "dist/**/*",
-      "dist-electron/**/*",
       "package.json",
       "LICENSE",
       "README.md",
@@ -72,7 +75,10 @@
     }
   },
   "workspaces": [
-    "core"
+    "shared",
+    "core",
+    "cli",
+    "electron"
   ],
   "bin": {
     "ldfcl-cli": "bin/ldfcl-cli.cjs"

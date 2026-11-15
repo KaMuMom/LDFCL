@@ -1,7 +1,3 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import { randomUUID } from "node:crypto";
-import { StringDecoder } from "node:string_decoder";
 import type {
   CrashCategory,
   CrashDiagnosis,
@@ -9,7 +5,11 @@ import type {
   DiagnosisMod,
   DiagnosisSharePayload,
   SuspectedMod,
-} from "../../shared/diagnostics";
+} from "@ldfcl/contracts/diagnostics";
+import { randomUUID } from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { StringDecoder } from "node:string_decoder";
 
 const MAX_REPORT_BYTES = 2 * 1024 * 1024;
 const MAX_LOG_BYTES = 256 * 1024;

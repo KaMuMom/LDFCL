@@ -1,8 +1,8 @@
-import path from "node:path";
-import * as fs from "node:fs/promises";
+import type { SkinLibraryEntry } from "@ldfcl/contracts/types";
 import { randomUUID } from "node:crypto";
+import * as fs from "node:fs/promises";
+import path from "node:path";
 import { inflateSync } from "node:zlib";
-import type { SkinLibraryEntry } from "../../shared/types";
 import { validateSkinPng } from "./accounts";
 
 const MAX_SKIN_BYTES = 2 * 1024 * 1024;

@@ -1,36 +1,36 @@
-import { createHash, randomUUID } from "node:crypto";
-import { createReadStream, createWriteStream, promises as fs } from "node:fs";
-import path from "node:path";
-import { Readable, Transform } from "node:stream";
-import { pipeline } from "node:stream/promises";
-import { LAUNCHER_USER_AGENT } from "../../shared/launcher";
+import { LAUNCHER_USER_AGENT } from "@ldfcl/contracts/launcher";
 import type {
   DownloadContext,
   DownloadFileProgress,
   DownloadPlanStage,
   DownloadTaskProgress,
   Task,
-} from "../../shared/types";
+} from "@ldfcl/contracts/types";
+import { createHash, randomUUID } from "node:crypto";
+import { createReadStream, createWriteStream, promises as fs } from "node:fs";
+import path from "node:path";
+import { Readable, Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { replaceStorageFile, safeDirectory } from "./content-store";
+import {
+  destinationKey,
+  finishDownloadFiles,
+  registerDownloadFiles,
+  transferQueue,
+  withDestination,
+} from "./download-queue";
 import {
   downloadUrls,
   getDownloadSource,
   type DownloadSource,
 } from "./download-source";
-import { replaceStorageFile, safeDirectory } from "./content-store";
+export type { DownloadContext } from "@ldfcl/contracts/types";
+export { getDownloadTaskFiles } from "./download-queue";
 export {
   downloadUrls,
   getDownloadSource,
   setDownloadSource,
 } from "./download-source";
-import {
-  destinationKey,
-  transferQueue,
-  withDestination,
-  registerDownloadFiles,
-  finishDownloadFiles,
-} from "./download-queue";
-export { getDownloadTaskFiles } from "./download-queue";
-export type { DownloadContext } from "../../shared/types";
 
 export interface DownloadItem {
   url: string;

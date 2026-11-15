@@ -297,13 +297,7 @@ if (-not [LdfclQaWindow]::SetWindowPos($Candidates[0].MainWindowHandle, [IntPtr]
 `;
     await new Promise((resolve, reject) => {
       const helper = spawn(
-        path.join(
-          process.env.SystemRoot || "C:\\Windows",
-          "System32",
-          "WindowsPowerShell",
-          "v1.0",
-          "powershell.exe",
-        ),
+        require("@ldfcl/core/platform-paths").windowsPowerShellPath(),
         [
           "-NoProfile",
           "-NonInteractive",

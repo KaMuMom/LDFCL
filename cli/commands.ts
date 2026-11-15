@@ -1,8 +1,7 @@
-import path from "node:path";
-import fs from "node:fs/promises";
 import { createLauncherCore } from "@ldfcl/core/launcher";
-import { resolveLauncherDataDirectory } from "@ldfcl/core/application-paths";
-import { resolveDefaultGameDirectoryPath } from "@ldfcl/core/game-directories";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { cliDirectories } from "./environment";
 
 interface AdvancedOptions {
   command: string[];
@@ -56,24 +55,18 @@ export async function runAdvanced(
     return {
       handled: true,
       value: new InstanceStorageService({
-        dataDir: options.dataDir || process.cwd(),
+        dataDir: cliDirectories(options).dataDir,
       }).diff(
         await jsonFile(path.resolve(id)),
         await jsonFile(path.resolve(options.command[3])),
       ),
     };
   }
-  const programDir = options.programDir || path.resolve(__dirname, "..", "..");
-  const paths = {
-    isPackaged: false,
-    execPath: process.execPath,
-    appPath: programDir,
-    dataDirOverride: options.dataDir || process.env.LDFCL_DATA_DIR,
-    gameRootOverride: options.gameRoot || process.env.LDFCL_GAME_ROOT,
-  };
+  const directories = cliDirectories(options);
   const core = await createLauncherCore({
-    dataDir: resolveLauncherDataDirectory(paths),
-    defaultGameRoot: resolveDefaultGameDirectoryPath(paths),
+    dataDir: directories.dataDir,
+    programDir: directories.programDir,
+    defaultGameRoot: directories.defaultGameRoot,
     host: {
       chooseFiles: async () => ({ canceled: true, filePaths: [] }),
       chooseSaveFile: async () => ({ canceled: true }),

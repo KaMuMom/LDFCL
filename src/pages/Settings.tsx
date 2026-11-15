@@ -16,9 +16,9 @@ import {
   Trash2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { GAME_PRESETS, gamePreset } from "../../shared/game-presets";
-import type { LauncherAPI, State } from "../../shared/types";
-import type { LauncherUpdateState } from "../../shared/updates";
+import { GAME_PRESETS, gamePreset } from "@ldfcl/contracts/game-presets";
+import type { LauncherAPI, State } from "@ldfcl/contracts/types";
+import type { LauncherUpdateState } from "@ldfcl/contracts/updates";
 import { SETTINGS_SECTIONS, type SettingsSection } from "../app/navigation";
 import GeneralGameSettings from "../components/GeneralGameSettings";
 import LauncherUpdates from "../components/LauncherUpdates";

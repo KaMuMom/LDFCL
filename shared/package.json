@@ -1,0 +1,35 @@
+{
+  "name": "@ldfcl/contracts",
+  "private": true,
+  "license": "MIT",
+  "version": "0.8.0",
+  "type": "commonjs",
+  "main": "./dist/types.js",
+  "types": "./dist/types.d.ts",
+  "files": [
+    "dist"
+  ],
+  "dependencies": {},
+  "exports": {
+    ".": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/esm/types.js",
+      "require": "./dist/types.js",
+      "default": "./dist/types.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/esm/*.js",
+      "require": "./dist/*.js",
+      "default": "./dist/*.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "node build.cjs",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

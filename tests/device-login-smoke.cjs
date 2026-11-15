@@ -16,11 +16,21 @@ const assert = require("node:assert/strict");
   const clientId = "11111111-2222-3333-4444-555555555555";
   const executable =
     process.env.LDFCL_TEST_EXECUTABLE || process.env.LDFCL_TEST_EXE;
-  const env = { ...process.env, LDFCL_DATA_DIR: dir };
+  const env = {
+    ...process.env,
+    LDFCL_DATA_DIR: dir,
+    LDFCL_GAME_ROOT: path.join(dir, ".minecraft"),
+  };
   delete env.ELECTRON_RUN_AS_NODE;
+  delete env.LDFCL_DEV_URL;
+  for (const key of Object.keys(env))
+    if (key.startsWith("PORTABLE_EXECUTABLE_")) delete env[key];
   const app = await electron.launch({
     executablePath: executable || require("electron"),
-    args: executable ? [] : [root],
+    args: [
+      ...(executable ? [] : [root]),
+      `--user-data-dir=${path.join(dir, "browser-profile")}`,
+    ],
     env,
     timeout: 45000,
   });
@@ -261,8 +271,14 @@ const assert = require("node:assert/strict");
       assert.fail(`${label}: ${JSON.stringify(last)}`);
     };
     const openAccount = async () => {
-      await page.locator("aside.sidebar").getByRole("button", {name:"账号管理",exact:true}).click();
-      await page.locator(".page-heading").getByRole("button", {name:"添加账号",exact:true}).click();
+      await page
+        .locator("aside.sidebar")
+        .getByRole("button", { name: "账号管理", exact: true })
+        .click();
+      await page
+        .locator(".page-heading")
+        .getByRole("button", { name: "添加账号", exact: true })
+        .click();
       await page.getByRole("dialog", { name: "你的冒险身份" }).waitFor();
       await button("正版登录").click();
       const field = page.getByLabel("Microsoft 应用 Client ID", {
@@ -739,15 +755,18 @@ const assert = require("node:assert/strict");
       "private device code, tokens and saved Client ID stay out of renderer state/events; account dispatch has no Client ID and launcher.json contains no plaintext ID",
     );
     assert.deepEqual(errors, []);
-    console.log(
-      JSON.stringify({
-        passed: true,
-        dataDir: dir,
-        screenshots: output,
-        checks,
-        pageErrors: errors,
-      }),
+    const report = {
+      passed: true,
+      dataDir: dir,
+      screenshots: output,
+      checks,
+      pageErrors: errors,
+    };
+    await fs.writeFile(
+      path.join(output, "device-login-smoke.json"),
+      JSON.stringify(report, null, 2),
     );
+    console.log(JSON.stringify(report));
   } finally {
     await app
       .evaluate(({ shell, clipboard }) => {

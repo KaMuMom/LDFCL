@@ -8,8 +8,8 @@ import {
   RotateCw,
   X,
 } from "lucide-react";
-import type { LauncherAPI } from "../../shared/types";
-import type { LauncherUpdateState } from "../../shared/updates";
+import type { LauncherAPI } from "@ldfcl/contracts/types";
+import type { LauncherUpdateState } from "@ldfcl/contracts/updates";
 import { GlassSurface } from "../ui/Glass";
 import "./launcher-updates.css";
 

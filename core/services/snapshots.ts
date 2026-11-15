@@ -1,21 +1,21 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import { createHash, randomUUID } from "node:crypto";
 import type {
   InstanceSnapshot,
   SnapshotPreview,
-  StoredFile,
   StorageDiff,
-} from "../../shared/instance-storage";
+  StoredFile,
+} from "@ldfcl/contracts/instance-storage";
+import { createHash, randomUUID } from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
 import {
   ContentStore,
   atomicStorageJson,
   pathExists,
+  publishStoragePaths,
   readStorageJson,
   safeDirectory,
   storagePath,
   withInstanceStorageLock,
-  publishStoragePaths,
 } from "./content-store";
 import {
   captureStorageTree,

@@ -8,11 +8,8 @@ const { EventEmitter } = require("node:events");
 const { PassThrough } = require("node:stream");
 const { captureJavaStdin, decodedJavaInvocation } = require("./helpers/java-invocation.cjs");
 const AdmZip = require("adm-zip");
-const compiledRoot =
-  process.env.LDFCL_TEST_COMPILED_ROOT ||
-  path.join(__dirname, "..", "core", "dist");
 const { JavaManager, javaMajor } = require(
-  path.join(compiledRoot, "core/services/java.js"),
+  require.resolve("@ldfcl/core/services/java"),
 );
 const {
   parseJavaInstallation,
@@ -20,17 +17,17 @@ const {
   compatibleJavaArchitecture,
   javaExecutables,
   realJavaExecutable,
-} = require(path.join(compiledRoot, "core/services/java-runtime.js"));
+} = require(require.resolve("@ldfcl/core/services/java-runtime"));
 const {
   prepareJvmArguments,
   nativeClassifier,
   nativeExtractionAllowed,
-} = require(path.join(compiledRoot, "core/services/launch-preparation.js"));
+} = require(require.resolve("@ldfcl/core/services/launch-preparation"));
 const { GameService, expandArguments } = require(
-  path.join(compiledRoot, "core/services/game.js"),
+  require.resolve("@ldfcl/core/services/game"),
 );
 const downloadsModule = require(
-  path.join(compiledRoot, "core/services/downloads.js"),
+  require.resolve("@ldfcl/core/services/downloads"),
 );
 
 async function temporary(t) {

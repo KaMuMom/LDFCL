@@ -1,17 +1,16 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import { Store } from "@ldfcl/core/store";
-import { JavaManager } from "@ldfcl/core/services/java";
+import { LAUNCHER_VERSION } from "@ldfcl/contracts/launcher";
+import type { GameDirectory, Instance } from "@ldfcl/contracts/types";
 import {
   gameDirectoryPathKey,
   gameDirectoryRoots,
-  resolveDefaultGameDirectoryPath,
   safeGameVersionId,
 } from "@ldfcl/core/game-directories";
 import { instanceGameDirectory } from "@ldfcl/core/instance-paths";
-import { resolveLauncherDataDirectory } from "@ldfcl/core/application-paths";
-import { LAUNCHER_VERSION } from "../shared/launcher";
-import type { GameDirectory, Instance } from "../shared/types";
+import { JavaManager } from "@ldfcl/core/services/java";
+import { Store } from "@ldfcl/core/store";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { cliDirectories } from "./environment";
 
 type Options = {
   json: boolean;
@@ -91,10 +90,7 @@ function parse(args: string[]): Options {
     "--output": "output",
     "--bundle": "bundle",
   };
-  const values: Record<
-    string,
-    "name" | "snapshot"
-  > = {
+  const values: Record<string, "name" | "snapshot"> = {
     "--name": "name",
     "--snapshot": "snapshot",
   };
@@ -151,23 +147,12 @@ async function load(options: Options): Promise<{
   dataDir: string;
   defaultGameRoot: string;
 }> {
-  const programDir = options.programDir || path.resolve(__dirname, "..", "..");
-  const dataDirOverride = options.dataDir || process.env.LDFCL_DATA_DIR;
-  const gameRootOverride = options.gameRoot || process.env.LDFCL_GAME_ROOT;
-  const paths = {
-    isPackaged: false,
-    execPath: process.execPath,
-    appPath: programDir,
-    ...(dataDirOverride
-      ? { dataDirOverride: path.resolve(dataDirOverride) }
-      : {}),
-    ...(gameRootOverride
-      ? { gameRootOverride: path.resolve(gameRootOverride) }
-      : {}),
-  };
-  const dataDir = resolveLauncherDataDirectory(paths);
-  const defaultGameRoot = resolveDefaultGameDirectoryPath(paths);
-  const store = new Store(dataDir, { defaultGameRoot, legacyDataDir: dataDir });
+  const { dataDir, defaultGameRoot, programDir } = cliDirectories(options);
+  const store = new Store(dataDir, {
+    defaultGameRoot,
+    legacyDataDir: dataDir,
+    programDir,
+  });
   await store.load({ readOnly: true });
   return { store, dataDir, defaultGameRoot };
 }
@@ -217,10 +202,12 @@ async function instanceRecord(
 
 export async function runCli(
   args: string[] = process.argv.slice(2),
+  context: { programDir?: string } = {},
 ): Promise<number> {
   const wantsJson = args.includes("--json");
   try {
     const options = parse(args);
+    options.programDir ||= context.programDir;
     if (options.version) {
       process.stdout.write(
         options.json

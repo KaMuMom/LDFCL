@@ -14,8 +14,8 @@ import type {
   DownloadPlanStage,
   LauncherAPI,
   Task,
-} from "../../shared/types";
-import { taskProgressPercent } from "../../shared/task-progress";
+} from "@ldfcl/contracts/types";
+import { taskProgressPercent } from "@ldfcl/contracts/task-progress";
 import { GlassSurface } from "../ui/Glass";
 import "./DownloadTasks.css";
 

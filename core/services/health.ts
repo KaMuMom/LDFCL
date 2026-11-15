@@ -1,13 +1,13 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import os from "node:os";
+import type { HealthIssue, HealthReport } from "@ldfcl/contracts/health";
+import type { Instance, Settings } from "@ldfcl/contracts/types";
 import AdmZip from "adm-zip";
-import type { Instance, Settings } from "../../shared/types";
-import type { HealthIssue, HealthReport } from "../../shared/health";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import {
+  assertPlainTree,
   instanceGameDirectory,
   instanceVersionDirectoryId,
-  assertPlainTree,
 } from "../instance-paths";
 import { JavaManager, automaticMemoryMb } from "./java";
 import { compatibleJavaArchitecture } from "./java-runtime";

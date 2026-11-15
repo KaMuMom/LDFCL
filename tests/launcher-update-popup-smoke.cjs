@@ -27,8 +27,7 @@ const { chromium } = require("playwright-core");
     await server.listen();
     browser = await chromium.launch({
       executablePath:
-        process.env.LDFCL_TEST_BROWSER ||
-        "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+        require("./helpers/browser.cjs").browserExecutable(),
       headless: true,
       args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
     });

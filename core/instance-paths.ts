@@ -1,7 +1,7 @@
+import type { GameDirectory, Instance } from "@ldfcl/contracts/types";
+import { randomUUID } from "node:crypto";
 import { constants, promises as fs } from "node:fs";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
-import type { GameDirectory, Instance } from "../shared/types";
 import { gameDirectoryRoots, safeGameVersionId } from "./game-directories";
 
 export function instanceVersionDirectoryId(instance: Instance): string {

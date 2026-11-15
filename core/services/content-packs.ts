@@ -1,14 +1,14 @@
+import type { Instance } from "@ldfcl/contracts/types";
+import AdmZip from "adm-zip";
+import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
-import AdmZip from "adm-zip";
-import type { Instance } from "../../shared/types";
 import {
   assertInstanceGameDirectory,
   assertPlainTree,
 } from "../instance-paths";
-import { withDestination } from "./download-queue";
 import { replaceStorageFile } from "./content-store";
+import { withDestination } from "./download-queue";
 
 export type PackKind = "resourcepack" | "shader";
 export type ShaderRenderer = "iris" | "oculus" | "optifine";

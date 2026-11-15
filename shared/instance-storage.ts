@@ -1,4 +1,4 @@
-import type { Instance } from "./types";
+import type { Instance } from "./types.js";
 
 export interface StoredFile {
   path: string;

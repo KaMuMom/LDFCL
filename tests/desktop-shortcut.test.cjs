@@ -7,7 +7,7 @@ const path = require("node:path");
 const {
   ensureDesktopShortcut,
   DESKTOP_SHORTCUT_APP_ID,
-} = require("../dist-electron/electron/desktop-shortcut.js");
+} = require("@ldfcl/desktop/desktop-shortcut");
 
 async function fixture(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "LDFCL-shortcut-test-"));

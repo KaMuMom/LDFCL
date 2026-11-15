@@ -21,8 +21,8 @@ import {
   Wifi,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { GAME_PRESETS } from "../../shared/game-presets";
-import type { Instance, LauncherAPI } from "../../shared/types";
+import { GAME_PRESETS } from "@ldfcl/contracts/game-presets";
+import type { Instance, LauncherAPI } from "@ldfcl/contracts/types";
 import { GlassSurface } from "../ui/Glass";
 import Tabs from "../ui/Tabs";
 import GameOptionsFields from "./GameOptionsFields";

@@ -1,6 +1,6 @@
 # LDFCL 当前功能与实现方式
 
-更新：2026-11-15，当前工作版本 **0.7.0**。本版重构全部功能的导航、页面组装和共享交互：游戏 / 资源 / 个人 / 工具四组主菜单，七类启动器设置，独立账号管理和下载筛选，角色工作区，功能搜索与系统动效偏好。默认轻量材质，保留既有服务、数据目录和版本隔离。完整功能映射见 [0.7.0 重构说明](0.7.0_REFACTOR.md)，验证记录见 [VALIDATION](../VALIDATION.md)。本地构建与 GitHub 已发布版本分别标明，不将本地包称为在线 Latest。
+更新：2026-11-15，当前工作版本 **0.8.0**。本版保留 0.7.0 全部功能和界面交互，重构四个独立包、79 个核心命令的八个业务模块、资源定位、便携路径及构建工具。游戏 / 资源 / 个人 / 工具导航、七类设置、独立账号管理、下载筛选、角色工作区和功能搜索延续。见 [0.8.0 架构及兼容说明](0.8.0_ARCHITECTURE.md)、[0.7.0 界面说明](0.7.0_REFACTOR.md) 和 [VALIDATION](../VALIDATION.md)。本地构建与 GitHub 已发布版本分别标明。
 
 
 ## 架构
@@ -50,8 +50,8 @@ React 调用 preload → Electron 注入 Host 的核心 → 文件/API/游戏进
 
 | 模块         | 文件                                                                                                                                                     |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 宿主/编排    | `electron/main.ts`、`core/launcher.ts`、`core/features.ts`                                                                                               |
-| 目录/配置    | `core/store.ts`、`game-directories.ts`、`instance-paths.ts`                                                                                              |
+| 宿主/编排    | `electron/main.ts`、`core/launcher.ts`、`core/runtime.ts`、`core/commands/`、`core/features.ts`                                                                                               |
+| 目录/配置    | `core/store.ts`、`core/portable-paths.ts`、`game-directories.ts`、`instance-paths.ts`                                                                                              |
 | 安装/Java    | `core/services/game.ts`、`java.ts`、`neoforge.ts`、`optifine.ts`                                                                                         |
 | 内容/下载    | `core/services/content.ts`、`downloads.ts`、`download-source.ts`、`download-queue.ts`、`content-packs.ts`                                                |
 | CAS/快照     | `core/services/content-store.ts`、`instance-manifest.ts`、`snapshots.ts`                                                                                 |
@@ -67,7 +67,7 @@ React 调用 preload → Electron 注入 Host 的核心 → 文件/API/游戏进
 - `.part` 可跨进程重请求续传，下载任务列表没有持久队列/自动重新调度。
 - 目前以 Modrinth 内容生态为主，尚无完整 CurseForge 支持、可选前置勾选或所有整合包格式。
 - 皮肤库还可增加搜索/标签/分组/批量；编辑器可扩展基底/外层、吸管、填充、镜像及重做。
-- 桌面 IPC 仍有集中路由和部分 `any`；资源、实例、衣橱、日志和关于已拆分加载，首页仍包含 React 与 skinview3d，入口构建仍有大于 500kB 的体积提示。
+- 核心命令已拆为八个业务模块并检查注册完整性；部分历史请求/响应仍使用 `any`，尚非端到端严格类型的 RPC。页面继续按需加载，skinview3d 分块仍约 511 kB。
 - 界面以 60 FPS 为优化目标。CPU 降速压力测试不能模拟 4GB 内存、老款核显、驱动及系统换页，尚未完成该硬件组合的真机验收；不承诺所有电脑或瞬时最低帧率。
 - 需要真实获准 Microsoft 应用/账号验证登录、续期与在线外观操作；本轮未操作真实账号或在线外观服务。没有进入存档进行长期游玩/性能和联机兼容测试。
 - 发布产物未做 Authenticode 签名；Windows以外平台没有完整发行与实机矩阵。

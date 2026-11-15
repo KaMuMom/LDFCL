@@ -1,26 +1,26 @@
-import path from "node:path";
-import fs from "node:fs/promises";
-import { createHash, randomUUID } from "node:crypto";
-import AdmZip from "adm-zip";
+import { LAUNCHER_USER_AGENT } from "@ldfcl/contracts/launcher";
 import type {
   DownloadContext,
   Instance,
   ModpackVersion,
-} from "../../shared/types";
-import { LAUNCHER_USER_AGENT } from "../../shared/launcher";
+} from "@ldfcl/contracts/types";
+import AdmZip from "adm-zip";
+import { createHash, randomUUID } from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
 import {
   assertInstanceGameDirectory,
   assertPlainTree,
   instanceGameDirectory,
   instanceVersionDirectoryId,
 } from "../instance-paths";
+import { replaceStorageFile } from "./content-store";
+import { DownloadManager } from "./downloads";
+import { findDuplicateMods, readModMetadata } from "./mod-metadata";
 import {
   ModTranslationCatalog,
   type LocalizedModFields,
 } from "./mod-translations";
-import { readModMetadata, findDuplicateMods } from "./mod-metadata";
-import { DownloadManager } from "./downloads";
-import { replaceStorageFile } from "./content-store";
 
 const API = "https://api.modrinth.com/v2";
 const MAX_ARCHIVE = 1024 * 1024 * 1024;

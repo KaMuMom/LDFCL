@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Archive, Download, RotateCcw, Plus, RefreshCw } from "lucide-react";
-import type { LauncherAPI } from "../../shared/types";
+import type { LauncherAPI } from "@ldfcl/contracts/types";
 import "./improvements.css";
 
 export default function InstanceStorage({

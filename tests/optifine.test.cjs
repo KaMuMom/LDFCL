@@ -4,18 +4,15 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const os = require("node:os");
 const AdmZip = require("adm-zip");
-const compiled =
-  process.env.LDFCL_TEST_COMPILED_ROOT ||
-  path.join(__dirname, "..", "core", "dist");
-const optifine = require(path.join(compiled, "core/services/optifine.js"));
-const java = require(path.join(compiled, "core/services/java.js"));
-const { GameService } = require(path.join(compiled, "core/services/game.js"));
-const { DownloadManager } = require(path.join(compiled, "core/services/downloads.js"));
+const optifine = require(require.resolve("@ldfcl/core/services/optifine"));
+const java = require(require.resolve("@ldfcl/core/services/java"));
+const { GameService } = require(require.resolve("@ldfcl/core/services/game"));
+const { DownloadManager } = require(require.resolve("@ldfcl/core/services/downloads"));
 const { scanGameDirectory } = require(
-  path.join(compiled, "core/game-directories.js"),
+  require.resolve("@ldfcl/core/game-directories"),
 );
 const { OPTIFINE_BRIDGE } = require(
-  path.join(compiled, "core/services/optifine-bridge.js"),
+  require.resolve("@ldfcl/core/services/optifine-bridge"),
 );
 const mc = "1.12.2";
 const raw = (patch = "G5", extra = {}) => ({

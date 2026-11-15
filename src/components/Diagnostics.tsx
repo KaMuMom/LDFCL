@@ -7,8 +7,8 @@ import {
   Terminal,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import type { CrashDiagnosis } from "../../shared/diagnostics";
-import type { Instance, LauncherAPI } from "../../shared/types";
+import type { CrashDiagnosis } from "@ldfcl/contracts/diagnostics";
+import type { Instance, LauncherAPI } from "@ldfcl/contracts/types";
 import { GlassSurface } from "../ui/Glass";
 import Tabs from "../ui/Tabs";
 import "./diagnostics.css";

@@ -1,12 +1,13 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import https from "node:https";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { spawn } from "node:child_process";
 import type {
   LauncherUpdateAttempt,
   LauncherUpdateState,
-} from "../shared/updates";
+} from "@ldfcl/contracts/updates";
+import { windowsPowerShellPath } from "@ldfcl/core/platform-paths";
+import { spawn } from "node:child_process";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import fs from "node:fs/promises";
+import https from "node:https";
+import path from "node:path";
 import { UPDATE_HELPER } from "./update-helper";
 export { UPDATE_HELPER } from "./update-helper";
 
@@ -333,13 +334,7 @@ async function launchUpdateHelper(
   let failure: string | undefined;
   let diagnostic = "";
   const child = spawn(
-    path.join(
-      process.env.SystemRoot || "C:\\Windows",
-      "System32",
-      "WindowsPowerShell",
-      "v1.0",
-      "powershell.exe",
-    ),
+    windowsPowerShellPath(),
     [
       "-NoProfile",
       "-NonInteractive",

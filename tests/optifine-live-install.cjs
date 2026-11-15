@@ -7,12 +7,9 @@ const path = require("node:path");
 const os = require("node:os");
 const { createHash } = require("node:crypto");
 const AdmZip = require("adm-zip");
-const compiled =
-  process.env.LDFCL_TEST_COMPILED_ROOT ||
-  path.join(__dirname, "..", "core", "dist");
-const { GameService } = require(path.join(compiled, "core/services/game.js"));
+const { GameService } = require(require.resolve("@ldfcl/core/services/game"));
 const { scanGameDirectory } = require(
-  path.join(compiled, "core/game-directories.js"),
+  require.resolve("@ldfcl/core/game-directories"),
 );
 const hash = (bytes, algorithm = "sha256") =>
   createHash(algorithm).update(bytes).digest("hex");

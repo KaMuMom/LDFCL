@@ -1,21 +1,21 @@
+import { validateGameOptions } from "@ldfcl/contracts/game-settings";
+import type { HealthFixLog, HealthReport } from "@ldfcl/contracts/health";
+import { validateExtraJvmArguments } from "@ldfcl/contracts/jvm-arguments";
+import type { Instance } from "@ldfcl/contracts/types";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
-import { Store } from "./store";
-import { validateGameOptions } from "../shared/game-settings";
-import { validateExtraJvmArguments } from "../shared/jvm-arguments";
-import type { Instance } from "../shared/types";
-import type { HealthReport, HealthFixLog } from "../shared/health";
-import type { LauncherHost } from "./host";
 import { gameDirectoryRoots } from "./game-directories";
+import type { LauncherHost } from "./host";
 import {
   assertInstanceGameDirectory,
   instanceGameDirectory,
 } from "./instance-paths";
+import { CrashDiagnostics } from "./services/crash-diagnostics";
 import { HealthScanner } from "./services/health";
 import { InstanceStorageService } from "./services/instance-manifest";
 import { SnapshotService } from "./services/snapshots";
-import { CrashDiagnostics } from "./services/crash-diagnostics";
+import { Store } from "./store";
 
 async function jsonWrite(file: string, value: unknown) {
   await fs.mkdir(path.dirname(file), { recursive: true });
@@ -76,10 +76,10 @@ export class LauncherFeatures {
     return instanceGameDirectory(this.roots.minecraftRoot, instance);
   }
   async record(instance: Instance) {
-    await jsonWrite(
-      path.join(this.directory(instance), "instance.json"),
-      instance,
-    );
+    await jsonWrite(path.join(this.directory(instance), "instance.json"), {
+      ...instance,
+      portableJavaPath: this.store.portableJavaPath(instance.javaPath),
+    });
   }
   async migrate(instance: Instance) {
     await assertInstanceGameDirectory(this.roots.minecraftRoot, instance);
@@ -233,7 +233,12 @@ export class LauncherFeatures {
     if (restored) {
       instance.gameSettings = validateGameOptions(restored.gameSettings || {});
       instance.javaPath =
-        typeof restored.javaPath === "string" ? restored.javaPath : undefined;
+        typeof restored.javaPath === "string"
+          ? this.store.restoreJavaPath(
+              restored.javaPath,
+              restored.portableJavaPath,
+            )
+          : undefined;
       instance.memoryMb =
         typeof restored.memoryMb === "number" &&
         Number.isFinite(restored.memoryMb) &&

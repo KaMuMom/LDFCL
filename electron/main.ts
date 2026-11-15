@@ -1,21 +1,24 @@
 import {
+  resolveLauncherDataDirectory,
+  resolveProgramDirectory,
+} from "@ldfcl/core/application-paths";
+import { resolveDefaultGameDirectoryPath } from "@ldfcl/core/game-directories";
+import type { LauncherCore, LauncherCoreOptions } from "@ldfcl/core/launcher";
+import {
   app,
   BrowserWindow,
-  ipcMain,
-  shell,
-  dialog,
-  nativeImage,
-  screen,
-  safeStorage,
   clipboard,
+  dialog,
+  ipcMain,
+  nativeImage,
+  safeStorage,
+  screen,
+  shell,
 } from "electron";
-import path from "node:path";
 import { randomBytes } from "node:crypto";
-import type { LauncherCore, LauncherCoreOptions } from "@ldfcl/core/launcher";
-import { resolveLauncherDataDirectory } from "@ldfcl/core/application-paths";
-import { resolveDefaultGameDirectoryPath } from "@ldfcl/core/game-directories";
-import { LauncherUpdater, RELEASE_PAGE } from "./updater";
+import path from "node:path";
 import { ensureDesktopShortcut } from "./desktop-shortcut";
+import { LauncherUpdater, RELEASE_PAGE } from "./updater";
 
 let win: BrowserWindow | null = null;
 let launcher: LauncherCore | undefined;
@@ -111,7 +114,7 @@ function createWindow() {
     // Visibility must never depend on core initialization or ready-to-show.
     show: true,
     title: "LDFCL",
-    icon: path.join(__dirname, "../../dist/icon.png"),
+    icon: path.join(app.getAppPath(), "dist", "icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -148,6 +151,7 @@ function coreOptions(): LauncherCoreOptions {
   startupDataDirectory = resolveLauncherDataDirectory(directoryOptions);
   return {
     dataDir: startupDataDirectory,
+    programDir: resolveProgramDirectory(directoryOptions),
     defaultGameRoot: resolveDefaultGameDirectoryPath(directoryOptions),
     // Keep the protected Electron profile so existing encrypted accounts work.
     legacyUserDataDir: process.env.LDFCL_DATA_DIR
@@ -209,7 +213,7 @@ async function startLauncher() {
     }
     if (process.env.LDFCL_DEV_URL)
       await win!.loadURL(process.env.LDFCL_DEV_URL);
-    else await win!.loadFile(path.join(__dirname, "../../dist/index.html"));
+    else await win!.loadFile(path.join(app.getAppPath(), "dist", "index.html"));
     // A loaded HTML document can still have a missing or failed React chunk.
     // A replacement is healthy only after the actual launcher UI has mounted.
     if (app.isPackaged) {
