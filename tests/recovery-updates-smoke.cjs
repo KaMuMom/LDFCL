@@ -1,3 +1,4 @@
+const { isolateDesktop } = require("./helpers/isolated-desktop.cjs");
 const { chromium } = require("playwright-core");
 const { spawn } = require("node:child_process");
 const assert = require("node:assert/strict");
@@ -107,6 +108,7 @@ const AdmZip = require("adm-zip");
 
   async function start() {
     const cdpPort = await port();
+    const inspectorPort = await port();
     const env = { ...process.env };
     for (const key of [
       "LDFCL_DATA_DIR",
@@ -131,7 +133,7 @@ const AdmZip = require("adm-zip");
     session = run;
     run.child = spawn(
       executable,
-      [`--user-data-dir=${chromiumDir}`, `--remote-debugging-port=${cdpPort}`],
+      [`--inspect-brk=127.0.0.1:${inspectorPort}`, `--user-data-dir=${chromiumDir}`, `--remote-debugging-port=${cdpPort}`],
       { env, windowsHide: true, stdio: "ignore" },
     );
     run.child.once("error", (error) => {
@@ -142,6 +144,7 @@ const AdmZip = require("adm-zip");
       run.exitCode = code;
       run.exited = true;
     });
+    await isolateDesktop(inspectorPort, path.join(workspace, "desktop"));
     const deadline = Date.now() + 60000;
     let endpoint;
     while (Date.now() < deadline) {
@@ -548,6 +551,7 @@ if (-not [LdfclQaWindow]::SetWindowPos($Candidates[0].MainWindowHandle, [IntPtr]
     await run.page
       .getByRole("button", { name: "启动器设置", exact: true })
       .click();
+    await run.page.locator('.settings-navigation').getByRole('button', {name:/检查更新/}).click();
     const panel = run.page.locator(".launcher-update-panel");
     await panel.waitFor();
     await panel

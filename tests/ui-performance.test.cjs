@@ -12,10 +12,14 @@ test("interface mode defaults safely for new and invalid legacy settings and per
   let store = new Store(dir);
   await store.load();
   assert.equal(store.settings.interfacePerformance, "efficient");
+  assert.equal(store.settings.interfaceMotion, "system");
+  await store.updateSettings({interfaceMotion:"reduced"});
   await store.updateSettings({ interfacePerformance: "quality" });
   store = new Store(dir);
   await store.load();
   assert.equal(store.settings.interfacePerformance, "quality");
+  assert.equal(store.settings.interfaceMotion, "reduced");
+  await assert.rejects(store.updateSettings({interfaceMotion:"unknown"}), /动态效果/);
   await assert.rejects(
     store.updateSettings({ interfacePerformance: "turbo" }),
     /界面性能/,
@@ -25,10 +29,12 @@ test("interface mode defaults safely for new and invalid legacy settings and per
   const disk = JSON.parse(await fs.readFile(file, "utf8"));
   assert.equal(disk.settings.interfacePerformance, "quality");
   disk.settings.interfacePerformance = "turbo";
+  disk.settings.interfaceMotion = "legacy";
   await fs.writeFile(file, JSON.stringify(disk));
   store = new Store(dir);
   await store.load();
   assert.equal(store.settings.interfacePerformance, "efficient");
+  assert.equal(store.settings.interfaceMotion, "system");
   assert.deepEqual(validateSettings({ interfacePerformance: "efficient" }), {
     interfacePerformance: "efficient",
   });

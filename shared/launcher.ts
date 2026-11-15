@@ -1,2 +1,2 @@
-export const LAUNCHER_VERSION = "0.6.5";
+export const LAUNCHER_VERSION = "0.7.0";
 export const LAUNCHER_USER_AGENT = `LDFCL/${LAUNCHER_VERSION} (Minecraft desktop launcher)`;

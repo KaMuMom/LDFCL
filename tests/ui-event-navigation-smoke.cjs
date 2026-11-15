@@ -278,9 +278,9 @@ const { chromium } = require("playwright-core");
       1,
     );
     await page.getByRole("button", { name: "清除已完成", exact: true }).click();
-    assert.equal(await page.locator(".download-task-card").count(), 1);
+    assert.equal(await page.locator(".download-task-card").count(), 2);
     report.checks.push(
-      "3600 progress events merge into three correct terminal/latest task cards without lost completion/error/pause; clear finished preserves paused task",
+      "3600 progress events merge into three correct terminal/latest task cards without lost completion/error/pause; clear finished preserves failed and paused tasks",
     );
 
     await page.getByRole("button", { name: "资源下载", exact: true }).click();

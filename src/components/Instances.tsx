@@ -1,4 +1,3 @@
-import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -21,14 +20,16 @@ import {
   Trash2,
   Wifi,
 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { GAME_PRESETS } from "../../shared/game-presets";
 import type { Instance, LauncherAPI } from "../../shared/types";
+import { GlassSurface } from "../ui/Glass";
+import Tabs from "../ui/Tabs";
 import GameOptionsFields from "./GameOptionsFields";
 import HealthPanel from "./HealthPanel";
-import InstanceStorage from "./InstanceStorage";
 import InstanceContentPacks from "./InstanceContentPacks";
-import { GAME_PRESETS } from "../../shared/game-presets";
-import { GlassSurface } from "../ui/Glass";
 import "./instances.css";
+import InstanceStorage from "./InstanceStorage";
 
 type Props = {
   initialTab: string;
@@ -171,7 +172,6 @@ export default function Instances({
   const choose = async (version: Instance) => {
     if (selecting || version.id === instance?.id) return;
     setSelecting(version.id);
-    setTab("mods");
     try {
       await select({ instanceId: version.id });
     } catch (error) {
@@ -590,25 +590,20 @@ function InstanceManager({
           </button>
         </div>
       </header>
-      <div className="tabs instance-tabs">
-        {[
-          ["mods", "Mod 管理"],
-          ["overview", "实例概览"],
-          ["game", "游戏预设"],
-          ["advanced", "实例设置"],
-          ["health", "健康与快照"],
-          ["packs", "资源与光影"],
-        ].map(([id, label]) => (
-          <button
-            key={id}
-            className={tab === id ? "selected" : ""}
-            aria-pressed={tab === id}
-            onClick={() => setTab(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        label="实例管理"
+        className="instance-tabs"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { id: "overview", label: "概览" },
+          { id: "mods", label: "Mod 管理" },
+          { id: "packs", label: "资源与光影" },
+          { id: "game", label: "游戏设置" },
+          { id: "health", label: "健康与快照" },
+          { id: "advanced", label: "实例设置" },
+        ]}
+      />
       {tab === "overview" && (
         <div className="detail-body instance-overview">
           <div className="info-grid">

@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
   Copy,
@@ -7,9 +6,11 @@ import {
   ShieldCheck,
   Terminal,
 } from "lucide-react";
-import type { Instance, LauncherAPI } from "../../shared/types";
+import { useCallback, useEffect, useState } from "react";
 import type { CrashDiagnosis } from "../../shared/diagnostics";
+import type { Instance, LauncherAPI } from "../../shared/types";
 import { GlassSurface } from "../ui/Glass";
+import Tabs from "../ui/Tabs";
 import "./diagnostics.css";
 
 interface Props {
@@ -157,28 +158,21 @@ export default function Diagnostics({
         </div>
       </header>
       <div className="diagnostic-toolbar">
-        <div className="diagnostic-tabs" role="tablist" aria-label="日志视图">
-          <button
-            id="diagnostic-log-tab"
-            role="tab"
-            aria-controls="diagnostic-log-panel"
-            aria-selected={tab === "logs"}
-            onClick={() => setTab("logs")}
-          >
-            <Terminal size={16} />
-            实时日志
-          </button>
-          <button
-            id="diagnostic-report-tab"
-            role="tab"
-            aria-controls="diagnostic-report-panel"
-            aria-selected={tab === "diagnosis"}
-            onClick={() => setTab("diagnosis")}
-          >
-            <ShieldCheck size={16} />
-            崩溃诊断{reports.length ? ` · ${reports.length}` : ""}
-          </button>
-        </div>
+        <Tabs
+          label="日志视图"
+          value={tab}
+          onChange={setTab}
+          className="diagnostic-tabs"
+          items={[
+            { id: "logs", label: "实时日志", icon: <Terminal size={16} /> },
+            {
+              id: "diagnosis",
+              label: "崩溃诊断",
+              icon: <ShieldCheck size={16} />,
+              count: reports.length,
+            },
+          ]}
+        />
         <label>
           实例{" "}
           <select
@@ -212,7 +206,7 @@ export default function Diagnostics({
         <GlassSurface
           id="diagnostic-log-panel"
           role="tabpanel"
-          aria-labelledby="diagnostic-log-tab"
+          aria-label="实时日志"
           className="diagnostic-live-panel"
         >
           <div className="diagnostic-card-heading">
@@ -244,7 +238,7 @@ export default function Diagnostics({
         <div
           id="diagnostic-report-panel"
           role="tabpanel"
-          aria-labelledby="diagnostic-report-tab"
+          aria-label="崩溃诊断"
           className="diagnostic-report-layout"
         >
           <GlassSurface className="diagnostic-history">

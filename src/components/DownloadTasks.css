@@ -33,12 +33,12 @@
   font-size: 12px;
 }
 .download-status.completed {
-  color: #29835b;
+  color: var(--success);
 }
 .download-status.error,
 .download-status.failed,
 .download-file-error {
-  color: #b64740;
+  color: var(--danger);
 }
 .download-task-meter {
   margin-top: 13px;
@@ -90,10 +90,10 @@
 }
 .download-plan-stages {
   margin-top: 15px;
-  border-top: 1px solid var(--border, #97aec526);
+  border-top: 1px solid var(--border, var(--border));
 }
 .download-stage {
-  border-bottom: 1px solid var(--border, #97aec526);
+  border-bottom: 1px solid var(--border, var(--border));
 }
 .download-stage-heading {
   display: flex;
@@ -128,18 +128,18 @@
   width: 18px;
   height: 18px;
   flex: none;
-  border: 1px solid var(--border, #97aec54d);
+  border: 1px solid var(--border, var(--border));
   border-radius: 50%;
   color: var(--accent);
 }
 .download-stage.completed .download-stage-dot {
-  color: #29835b;
-  background: #3caa6f15;
-  border-color: #3caa6f30;
+  color: var(--success);
+  background: var(--success-soft);
+  border-color: var(--accent-border);
 }
 .download-stage.error .download-stage-dot {
-  color: #b64740;
-  border-color: #b6474050;
+  color: var(--danger);
+  border-color: var(--accent-border);
 }
 .download-stage-content {
   padding: 0 0 12px 27px;
@@ -210,7 +210,7 @@
   gap: 3px 10px;
   align-items: start;
   padding: 8px 0;
-  border-bottom: 1px solid var(--border, #97aec526);
+  border-bottom: 1px solid var(--border, var(--border));
   font-size: 11px;
 }
 .download-file-list li > span:first-child {

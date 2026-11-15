@@ -27,23 +27,8 @@
   background: var(--surface);
 }
 .diagnostic-tabs {
-  display: flex;
-  gap: 5px;
-  padding: 4px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-}
-.diagnostic-tabs button {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 9px 13px;
-  border-radius: 10px;
-}
-.diagnostic-tabs button[aria-selected="true"] {
-  color: var(--accent);
-  background: var(--accent-soft);
+  min-width: 260px;
+  margin: 0;
 }
 .diagnostic-live-panel,
 .diagnostic-history,
@@ -52,8 +37,8 @@
   min-width: 0;
 }
 .diagnostic-console {
-  background: #101d30;
-  color: #d7e8ff;
+  background: var(--surface);
+  color: var(--muted);
   padding: 16px;
   border-radius: 14px;
   font:
@@ -124,7 +109,7 @@
 .diagnostic-confidence {
   color: var(--accent);
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: 14px;
   padding: 6px 10px;
   font-size: 12px;
   white-space: nowrap;

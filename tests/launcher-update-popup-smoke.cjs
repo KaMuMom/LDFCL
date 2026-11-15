@@ -177,6 +177,7 @@ const { chromium } = require("playwright-core");
         await dock
           .getByRole("button", { name: "启动器设置", exact: true })
           .click();
+        await page.locator('.settings-navigation').getByRole('button', {name:/检查更新/}).click();
         if (raceStatus === "ready") {
           await page
             .locator(".launcher-update-panel")
@@ -410,6 +411,7 @@ const { chromium } = require("playwright-core");
         await dock
           .getByRole("button", { name: "启动器设置", exact: true })
           .click();
+        await page.locator('.settings-navigation').getByRole('button', {name:/检查更新/}).click();
         await page.locator(".launcher-update-panel").waitFor();
         assert.equal(
           await popup.count(),
@@ -439,6 +441,7 @@ const { chromium } = require("playwright-core");
         await dock
           .getByRole("button", { name: "启动器设置", exact: true })
           .click();
+        await page.locator('.settings-navigation').getByRole('button', {name:/检查更新/}).click();
         await page.locator(".launcher-update-panel").waitFor();
         await home.click();
         assert.equal(
@@ -456,6 +459,7 @@ const { chromium } = require("playwright-core");
         await dock
           .getByRole("button", { name: "启动器设置", exact: true })
           .click();
+        await page.locator('.settings-navigation').getByRole('button', {name:/检查更新/}).click();
         const settingsCard = page.locator(".launcher-update-panel");
         await settingsCard
           .getByText("网络检查暂时不可用", { exact: true })
@@ -494,6 +498,7 @@ const { chromium } = require("playwright-core");
         await dock
           .getByRole("button", { name: "启动器设置", exact: true })
           .click();
+        await page.locator('.settings-navigation').getByRole('button', {name:/检查更新/}).click();
         await settingsCard
           .locator(".launcher-update-attempt[data-outcome='failed']")
           .waitFor();

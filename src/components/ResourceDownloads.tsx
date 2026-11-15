@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import {
   Box,
   Check,
@@ -12,13 +11,15 @@ import {
   Sparkles,
   WandSparkles,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import type {
   Instance,
   LauncherAPI,
   OptifineVersion,
 } from "../../shared/types";
-import ContentBrowser, { type ContentKind } from "./ContentBrowser";
 import { GlassSurface } from "../ui/Glass";
+import Tabs from "../ui/Tabs";
+import ContentBrowser, { type ContentKind } from "./ContentBrowser";
 import "./resources.css";
 
 export type ResourceKind = "minecraft" | ContentKind;
@@ -89,25 +90,17 @@ export default function ResourceDownloads({
           下载任务
         </button>
       </div>
-      <GlassSurface
-        as="div"
-        className="content-tabs resource-tabs"
-        role="tablist"
-        aria-label="资源类型"
-      >
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            role="tab"
-            aria-selected={kind === tab.id}
-            className={`content-tab ${kind === tab.id ? "active" : ""}`}
-            onClick={() => setKind(tab.id)}
-          >
-            <tab.icon size={17} />
-            {tab.name}
-          </button>
-        ))}
-      </GlassSurface>
+      <Tabs
+        label="资源类型"
+        className="resource-tabs"
+        value={kind}
+        onChange={setKind}
+        items={tabs.map((tab) => ({
+          id: tab.id,
+          label: tab.name,
+          icon: <tab.icon size={17} />,
+        }))}
+      />
       <div
         hidden={kind !== "minecraft"}
         role="tabpanel"

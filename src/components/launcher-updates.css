@@ -21,11 +21,9 @@
   pointer-events: auto;
 }
 .launcher-update-popup .glass-backdrop::after {
-  background: #f8fbfff5;
+  background: var(--surface-raised);
 }
-:root[data-theme="dark"] .launcher-update-popup .glass-backdrop::after {
-  background: #223044fa;
-}
+
 .launcher-update-popup-heading {
   display: flex;
   align-items: flex-start;
@@ -118,7 +116,7 @@
 .launcher-update-progress progress {
   width: 100%;
   height: 7px;
-  accent-color: var(--accent, #4a72c9);
+  accent-color: var(--accent, var(--muted));
 }
 @media (max-width: 600px) {
   .launcher-update-popup-region {
@@ -140,7 +138,7 @@
   width: 100%;
   height: 7px;
   margin-top: 10px;
-  accent-color: var(--accent, #4a72c9);
+  accent-color: var(--accent, var(--muted));
 }
 .launcher-update-actions {
   display: flex;

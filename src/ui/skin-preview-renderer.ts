@@ -35,6 +35,7 @@ export function manageSkinPreview(
   const animating = () =>
     focused &&
     !motion.matches &&
+    document.documentElement.dataset.motion !== "reduced" &&
     (viewer.autoRotate || (quality && viewer.animation !== null));
   const schedule = () => {
     if (!frame && canDraw() && (dirty || animating()))
@@ -133,10 +134,14 @@ export function manageSkinPreview(
     visible = entry.isIntersecting;
     updateVisibility();
   });
-  const attributes = new MutationObserver(updateQuality);
+  const attributes = new MutationObserver((changes) => {
+    if (changes.some((change) => change.attributeName === "data-performance"))
+      updateQuality();
+    else invalidate();
+  });
   attributes.observe(document.documentElement, {
     attributes: true,
-    attributeFilter: ["data-performance"],
+    attributeFilter: ["data-performance", "data-motion"],
   });
   resize.observe(element);
   intersection.observe(element);

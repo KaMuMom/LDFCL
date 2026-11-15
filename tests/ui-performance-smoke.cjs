@@ -1,3 +1,4 @@
+const { isolateDesktop } = require("./helpers/isolated-desktop.cjs");
 const { chromium } = require("playwright-core");
 const { spawn, execFile } = require("node:child_process");
 const { promisify } = require("node:util");
@@ -46,7 +47,7 @@ const AdmZip = require("adm-zip");
   const reportPath = path.join(output, `${label}.json`);
   const report = {
     passed: false,
-    methodVersion: 2,
+    methodVersion: 3,
     label,
     timestamp: new Date().toISOString(),
     executable: source,
@@ -64,6 +65,7 @@ const AdmZip = require("adm-zip");
       "Samples exclude installation, network transfer and real Minecraft gameplay; cache and first-route setup are reported separately.",
       "Pointer stress dispatches synthetic window mousemove events at an 8ms requested interval; it is not native mouse input or full hit-testing latency measurement.",
       "Scroll stress changes the actual scrollable mod-list or nearest scrollable ancestor and records cumulative movement; wardrobe rotation is explicitly enabled before measurement.",
+      "Each sample requests foreground focus and records focus/visibility changes; interrupted samples are rejected instead of treated as valid foreground performance.",
     ],
   };
   let child,
@@ -219,6 +221,7 @@ const AdmZip = require("adm-zip");
       );
     }
     const cdpPort = await port();
+    const inspectorPort = await port();
     const environment = {
       ...process.env,
       LDFCL_DATA_DIR: data,
@@ -235,6 +238,7 @@ const AdmZip = require("adm-zip");
     child = spawn(
       executable,
       [
+        `--inspect-brk=127.0.0.1:${inspectorPort}`,
         `--user-data-dir=${path.join(workspace, "chromium")}`,
         `--remote-debugging-port=${cdpPort}`,
       ],
@@ -248,6 +252,10 @@ const AdmZip = require("adm-zip");
       report.spawnError = error.message;
       exited = true;
     });
+    report.isolatedDesktop = await isolateDesktop(
+      inspectorPort,
+      path.join(workspace, "desktop"),
+    );
     let endpoint;
     const deadline = Date.now() + 60000;
     while (Date.now() < deadline) {
@@ -361,6 +369,8 @@ const AdmZip = require("adm-zip");
       }));
     }
     async function sample(name, rate, action = "none") {
+      await page.bringToFront();
+      await page.evaluate(() => window.focus());
       await page.mouse.move(1100, 40);
       await pause(300);
       const before = await metrics();
@@ -372,6 +382,21 @@ const AdmZip = require("adm-zip");
               longStart = window.__uiPerfLongTasks.length,
               drawsStart = window.__uiPerfDraws;
             const times = [];
+            const windowState = {
+              initialVisibility: document.visibilityState,
+              initialFocus: document.hasFocus(),
+              changes: [],
+            };
+            const recordWindowState = (event) =>
+              windowState.changes.push({
+                event: event.type,
+                elapsedMs: performance.now() - started,
+                visibility: document.visibilityState,
+                focused: document.hasFocus(),
+              });
+            window.addEventListener("focus", recordWindowState);
+            window.addEventListener("blur", recordWindowState);
+            document.addEventListener("visibilitychange", recordWindowState);
             let last,
               frame,
               actionCount = 0;
@@ -424,6 +449,14 @@ const AdmZip = require("adm-zip");
             const finish = () => {
               cancelAnimationFrame(frame);
               clearInterval(timer);
+              window.removeEventListener("focus", recordWindowState);
+              window.removeEventListener("blur", recordWindowState);
+              document.removeEventListener(
+                "visibilitychange",
+                recordWindowState,
+              );
+              windowState.finalVisibility = document.visibilityState;
+              windowState.finalFocus = document.hasFocus();
               const elapsed = performance.now() - started;
               const sorted = [...times].sort((a, b) => a - b);
               const percentile = (p) =>
@@ -438,6 +471,7 @@ const AdmZip = require("adm-zip");
                 .slice(longStart)
                 .filter((entry) => entry.start >= started);
               resolve({
+                windowState,
                 elapsedMs: elapsed,
                 frames: times.length,
                 averageFps: total ? (times.length * 1000) / total : 0,
@@ -520,6 +554,16 @@ const AdmZip = require("adm-zip");
       };
       report.scenarios.push(entry);
       await fs.writeFile(reportPath, JSON.stringify(report, null, 2));
+      assert(
+        result.windowState.initialFocus &&
+          result.windowState.finalFocus &&
+          result.windowState.initialVisibility === "visible" &&
+          result.windowState.finalVisibility === "visible" &&
+          result.windowState.changes.every(
+            (state) => state.focused && state.visibility === "visible",
+          ),
+        `${name}: foreground sample interrupted: ${JSON.stringify(result.windowState)}`,
+      );
       console.log(
         JSON.stringify({
           scenario: name,
@@ -563,11 +607,22 @@ const AdmZip = require("adm-zip");
       await page
         .getByRole("button", { name: "启动器设置", exact: true })
         .click();
+      await page
+        .locator(".settings-navigation")
+        .getByRole("button", { name: /游戏默认项/ })
+        .click();
       await page.locator(".settings-grid").waitFor();
+      const defaultsToggle = page.getByRole("button", {
+        name: "启用通用游戏设置",
+        exact: true,
+      });
+      if ((await defaultsToggle.getAttribute("aria-pressed")) !== "true")
+        await defaultsToggle.click();
       await pause(500);
       await sample("settings-scroll", rate, "scroll");
       const modsStart = performance.now();
       await page.getByRole("button", { name: "游戏实例", exact: true }).click();
+      await page.getByRole("tab", { name: "Mod 管理", exact: true }).click();
       await page.locator(".mod-row").first().waitFor({ timeout: 60000 });
       report.scenarios.push({
         name: "mods-first-navigation",

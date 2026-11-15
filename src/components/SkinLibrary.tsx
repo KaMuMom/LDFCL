@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from "react";
 import {
   BookmarkPlus,
   Check,
@@ -9,10 +8,11 @@ import {
   Shirt,
   Trash2,
   Upload,
-  X,
 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import type { Account, SkinLibraryEntry } from "../../shared/types";
-import { GlassBackdrop, GlassSurface } from "../ui/Glass";
+import { GlassSurface } from "../ui/Glass";
+import Modal from "../ui/Modal";
 import "./skin-library.css";
 
 export type SkinLibraryDraft = {
@@ -116,35 +116,15 @@ function LibraryDialog({
   children: React.ReactNode;
   onClose: () => void;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const element = ref.current!;
-    element.showModal();
-    return () => element.close();
-  }, []);
   return (
-    <dialog
-      ref={ref}
-      className="glass-surface skin-library-dialog"
-      aria-label={title}
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
+    <Modal
+      title={title}
+      close={onClose}
+      closeLabel="关闭皮肤库窗口"
+      className="skin-library-dialog"
     >
-      <GlassBackdrop />
-      <header>
-        <h3>{title}</h3>
-        <button
-          className="icon-btn"
-          aria-label="关闭皮肤库窗口"
-          onClick={onClose}
-        >
-          <X size={18} />
-        </button>
-      </header>
       {children}
-    </dialog>
+    </Modal>
   );
 }
 

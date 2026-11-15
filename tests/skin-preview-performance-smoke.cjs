@@ -398,6 +398,7 @@ const { chromium } = require("playwright-core");
     await page
       .getByRole("button", { name: "关闭皮肤库窗口", exact: true })
       .click();
+    await page.getByRole("tab", {name:"角色预览与披风",exact:true}).click();
     await page
       .locator(".wardrobe-stage")
       .screenshot({ path: path.join(output, "efficient-wardrobe.png") });

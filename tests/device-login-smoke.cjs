@@ -261,7 +261,8 @@ const assert = require("node:assert/strict");
       assert.fail(`${label}: ${JSON.stringify(last)}`);
     };
     const openAccount = async () => {
-      await button("管理账号").click();
+      await page.locator("aside.sidebar").getByRole("button", {name:"账号管理",exact:true}).click();
+      await page.locator(".page-heading").getByRole("button", {name:"添加账号",exact:true}).click();
       await page.getByRole("dialog", { name: "你的冒险身份" }).waitFor();
       await button("正版登录").click();
       const field = page.getByLabel("Microsoft 应用 Client ID", {

@@ -1,6 +1,3 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { SkinViewer, WalkingAnimation } from "skinview3d";
-import { loadSkinToCanvas } from "skinview-utils";
 import {
   BookmarkPlus,
   Check,
@@ -22,17 +19,22 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import type { Account, SkinLibraryEntry } from "../../shared/types";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { loadSkinToCanvas } from "skinview-utils";
+import { SkinViewer, WalkingAnimation } from "skinview3d";
 import {
   DEFAULT_SKIN_NAME,
   defaultSkinTexture,
 } from "../../shared/default-skin";
-import SkinLibrary, { type SkinLibraryDraft } from "./SkinLibrary";
+import type { Account, SkinLibraryEntry } from "../../shared/types";
 import { GlassBackdrop, GlassSurface } from "../ui/Glass";
+import Modal from "../ui/Modal";
 import {
   manageSkinPreview,
   type SkinPreviewRenderer,
 } from "../ui/skin-preview-renderer";
+import Tabs from "../ui/Tabs";
+import SkinLibrary, { type SkinLibraryDraft } from "./SkinLibrary";
 import "./wardrobe.css";
 
 type Props = {
@@ -94,6 +96,7 @@ function skinDataUrl(source: string): Promise<string> {
 }
 
 function Wardrobe({ accounts, selectedAccountId, call, notify }: Props) {
+  const [view, setView] = useState<"preview" | "library">("preview");
   const [accountId, setAccountId] = useState(
     selectedAccountId ?? accounts[0]?.id ?? "",
   );
@@ -347,12 +350,14 @@ function Wardrobe({ accounts, selectedAccountId, call, notify }: Props) {
     return editCanvas.current.toDataURL("image/png");
   };
   const selectLibrarySkin = (entry: SkinLibraryEntry) => {
+    setView("preview");
     setLocalSkin({ url: entry.dataUrl, name: entry.name, libraryId: entry.id });
     setVariant(entry.variant);
   };
   const saveCurrentToLibrary = () =>
     action(async () => {
       const dataUrl = await skinDataUrl(skinSource);
+      setView("library");
       setLibraryDraft({
         dataUrl,
         variant,
@@ -366,7 +371,20 @@ function Wardrobe({ accounts, selectedAccountId, call, notify }: Props) {
 
   return (
     <div className="wardrobe">
-      <div className="wardrobe-layout">
+      <Tabs
+        label="角色工作区"
+        value={view}
+        onChange={setView}
+        items={[
+          { id: "preview", label: "角色预览与披风", icon: <Shirt size={16} /> },
+          {
+            id: "library",
+            label: "我的皮肤库",
+            icon: <BookmarkPlus size={16} />,
+          },
+        ]}
+      />
+      <div className="wardrobe-layout" hidden={view !== "preview"}>
         <div className="glass-surface wardrobe-stage" ref={stage}>
           <GlassBackdrop />
           <div className="wardrobe-stage-top">
@@ -655,216 +673,202 @@ function Wardrobe({ accounts, selectedAccountId, call, notify }: Props) {
           </GlassSurface>
         </div>
       </div>
-      <SkinLibrary
-        call={call}
-        notify={notify}
-        account={account}
-        editable={profile.editable && !loading}
-        disabled={busy || loading}
-        variant={variant}
-        selectedId={localSkin?.libraryId}
-        draft={libraryDraft}
-        onDraftClose={() => setLibraryDraft(null)}
-        onSaveCurrent={() => void saveCurrentToLibrary()}
-        onSelect={selectLibrarySkin}
-        onApplied={(entry, result) => {
-          setProfile({
-            ...result,
-            skins: result.skins ?? [],
-            capes: result.capes ?? [],
-          });
-          selectLibrarySkin(entry);
-        }}
-        onRemoved={(id) => {
-          setLocalSkin((previous) =>
-            previous?.libraryId === id
-              ? { url: previous.url, name: previous.name }
-              : previous,
-          );
-        }}
-        onBusyChange={setLibraryBusy}
-      />
+      <div hidden={view !== "library"}>
+        <SkinLibrary
+          call={call}
+          notify={notify}
+          account={account}
+          editable={profile.editable && !loading}
+          disabled={busy || loading}
+          variant={variant}
+          selectedId={localSkin?.libraryId}
+          draft={libraryDraft}
+          onDraftClose={() => setLibraryDraft(null)}
+          onSaveCurrent={() => void saveCurrentToLibrary()}
+          onSelect={selectLibrarySkin}
+          onApplied={(entry, result) => {
+            setProfile({
+              ...result,
+              skins: result.skins ?? [],
+              capes: result.capes ?? [],
+            });
+            selectLibrarySkin(entry);
+          }}
+          onRemoved={(id) => {
+            setLocalSkin((previous) =>
+              previous?.libraryId === id
+                ? { url: previous.url, name: previous.name }
+                : previous,
+            );
+          }}
+          onBusyChange={setLibraryBusy}
+        />
+      </div>
       {editorOpen && (
-        <div
-          className="wardrobe-editor-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label="皮肤像素编辑器"
+        <Modal
+          title="皮肤像素编辑器"
+          subtitle="64 × 64 像素纹理 · 预览、导出或同步至正版账号"
+          close={() => {
+            if (!busy) setEditorOpen(false);
+          }}
+          wide
+          className="wardrobe-editor"
         >
-          <GlassSurface as="div" className="wardrobe-editor">
-            <header>
+          <div className="wardrobe-editor-body">
+            <div className="wardrobe-pixel-wrap">
+              <canvas
+                ref={editCanvas}
+                width={64}
+                height={64}
+                aria-label="可涂色编辑的皮肤像素画布"
+                onPointerDown={(event) => {
+                  if (!editorReady.current) return;
+                  dragging.current = true;
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  history.current.push(
+                    event.currentTarget
+                      .getContext("2d")!
+                      .getImageData(0, 0, 64, 64),
+                  );
+                  if (history.current.length > 16) history.current.shift();
+                  draw(event);
+                }}
+                onPointerMove={draw}
+                onPointerUp={() => {
+                  dragging.current = false;
+                }}
+                onPointerCancel={() => {
+                  dragging.current = false;
+                }}
+              />
+              <div className="wardrobe-grid" />
+            </div>
+            <aside className="wardrobe-editor-side">
               <div>
-                <h3>像素之间，创造你的角色</h3>
-                <p className="muted wardrobe-editor-subtitle">
-                  64 × 64 皮肤纹理 · 修改后可预览、导出或同步
-                </p>
+                <label htmlFor="wardrobe-brush-color">画笔颜色</label>
+                <div className="wardrobe-color">
+                  <input
+                    id="wardrobe-brush-color"
+                    type="color"
+                    value={brushColor}
+                    onChange={(event) => {
+                      setBrushColor(event.target.value);
+                      setEraser(false);
+                    }}
+                  />
+                  <span>{brushColor.toUpperCase()}</span>
+                </div>
+              </div>
+              <div>
+                <label htmlFor="wardrobe-brush-size">画笔大小</label>
+                <select
+                  id="wardrobe-brush-size"
+                  className="field wardrobe-brush-size"
+                  value={brushSize}
+                  onChange={(event) => setBrushSize(Number(event.target.value))}
+                >
+                  <option value={1}>1 × 1 像素</option>
+                  <option value={2}>2 × 2 像素</option>
+                  <option value={4}>4 × 4 像素</option>
+                </select>
               </div>
               <button
-                className="btn subtle"
-                aria-label="关闭编辑器"
-                onClick={() => setEditorOpen(false)}
+                className={`btn ${eraser ? "primary" : "subtle"}`}
+                onClick={() => setEraser(!eraser)}
               >
-                <X size={18} />
+                <Eraser size={15} /> {eraser ? "橡皮擦已启用" : "橡皮擦"}
               </button>
-            </header>
-            <div className="wardrobe-editor-body">
-              <div className="wardrobe-pixel-wrap">
-                <canvas
-                  ref={editCanvas}
-                  width={64}
-                  height={64}
-                  aria-label="可涂色编辑的皮肤像素画布"
-                  onPointerDown={(event) => {
-                    if (!editorReady.current) return;
-                    dragging.current = true;
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    history.current.push(
-                      event.currentTarget
-                        .getContext("2d")!
-                        .getImageData(0, 0, 64, 64),
-                    );
-                    if (history.current.length > 16) history.current.shift();
-                    draw(event);
-                  }}
-                  onPointerMove={draw}
-                  onPointerUp={() => {
-                    dragging.current = false;
-                  }}
-                  onPointerCancel={() => {
-                    dragging.current = false;
-                  }}
-                />
-                <div className="wardrobe-grid" />
-              </div>
-              <aside className="wardrobe-editor-side">
-                <div>
-                  <label htmlFor="wardrobe-brush-color">画笔颜色</label>
-                  <div className="wardrobe-color">
-                    <input
-                      id="wardrobe-brush-color"
-                      type="color"
-                      value={brushColor}
-                      onChange={(event) => {
-                        setBrushColor(event.target.value);
-                        setEraser(false);
-                      }}
-                    />
-                    <span>{brushColor.toUpperCase()}</span>
-                  </div>
-                </div>
-                <div>
-                  <label htmlFor="wardrobe-brush-size">画笔大小</label>
-                  <select
-                    id="wardrobe-brush-size"
-                    className="field wardrobe-brush-size"
-                    value={brushSize}
-                    onChange={(event) =>
-                      setBrushSize(Number(event.target.value))
-                    }
-                  >
-                    <option value={1}>1 × 1 像素</option>
-                    <option value={2}>2 × 2 像素</option>
-                    <option value={4}>4 × 4 像素</option>
-                  </select>
-                </div>
-                <button
-                  className={`btn ${eraser ? "primary" : "subtle"}`}
-                  onClick={() => setEraser(!eraser)}
-                >
-                  <Eraser size={15} /> {eraser ? "橡皮擦已启用" : "橡皮擦"}
-                </button>
-                <button
-                  className="btn subtle"
-                  onClick={() => {
-                    const previous = history.current.pop();
-                    if (previous)
-                      editCanvas.current
-                        ?.getContext("2d")
-                        ?.putImageData(previous, 0, 0);
-                  }}
-                >
-                  <Undo2 size={15} /> 撤销上一笔
-                </button>
-                <p className="wardrobe-note">
-                  每一格对应一个像素。图中为 Minecraft 原始 UV
-                  展开纹理，透明区域会在模型上隐藏对应外层。
-                </p>
-              </aside>
-            </div>
-            <footer className="wardrobe-editor-footer">
+              <button
+                className="btn subtle"
+                onClick={() => {
+                  const previous = history.current.pop();
+                  if (previous)
+                    editCanvas.current
+                      ?.getContext("2d")
+                      ?.putImageData(previous, 0, 0);
+                }}
+              >
+                <Undo2 size={15} /> 撤销上一笔
+              </button>
+              <p className="wardrobe-note">
+                每一格对应一个像素。图中为 Minecraft 原始 UV
+                展开纹理，透明区域会在模型上隐藏对应外层。
+              </p>
+            </aside>
+          </div>
+          <footer className="wardrobe-editor-footer">
+            <button
+              className="btn subtle"
+              disabled={busy}
+              onClick={() =>
+                void action(async () => {
+                  await call("skin:exportEdited", { dataUrl: editedData() });
+                })
+              }
+            >
+              <Download size={14} /> 导出 PNG
+            </button>
+            <div>
               <button
                 className="btn subtle"
                 disabled={busy}
-                onClick={() =>
-                  void action(async () => {
-                    await call("skin:exportEdited", { dataUrl: editedData() });
-                  })
-                }
+                onClick={() => {
+                  try {
+                    setLibraryDraft({
+                      dataUrl: editedData(),
+                      variant,
+                      name: "我的编辑皮肤",
+                    });
+                  } catch (error: any) {
+                    notify(error.message);
+                  }
+                }}
               >
-                <Download size={14} /> 导出 PNG
+                <BookmarkPlus size={14} /> 保存到皮肤库
               </button>
-              <div>
+              <button
+                className="btn subtle"
+                onClick={() => {
+                  try {
+                    const url = editedData();
+                    setEditorOpen(false);
+                    setLocalSkin({ url, name: "我的编辑皮肤.png" });
+                  } catch (error: any) {
+                    notify(error.message);
+                  }
+                }}
+              >
+                应用到预览
+              </button>
+              {profile.editable && (
                 <button
-                  className="btn subtle"
+                  className="btn primary"
                   disabled={busy}
-                  onClick={() => {
-                    try {
-                      setLibraryDraft({
+                  onClick={() =>
+                    void action(async () => {
+                      const result = await call("skin:saveEdited", {
+                        id: accountId,
                         dataUrl: editedData(),
                         variant,
-                        name: "我的编辑皮肤",
                       });
-                    } catch (error: any) {
-                      notify(error.message);
-                    }
-                  }}
-                >
-                  <BookmarkPlus size={14} /> 保存到皮肤库
-                </button>
-                <button
-                  className="btn subtle"
-                  onClick={() => {
-                    try {
-                      const url = editedData();
                       setEditorOpen(false);
-                      setLocalSkin({ url, name: "我的编辑皮肤.png" });
-                    } catch (error: any) {
-                      notify(error.message);
-                    }
-                  }}
+                      setLocalSkin(null);
+                      setProfile(result);
+                      notify("编辑后的皮肤已同步至正版账号。");
+                    })
+                  }
                 >
-                  应用到预览
+                  {busy ? (
+                    <LoaderCircle size={14} className="wardrobe-spin" />
+                  ) : (
+                    <Upload size={14} />
+                  )}{" "}
+                  同步正版账号
                 </button>
-                {profile.editable && (
-                  <button
-                    className="btn primary"
-                    disabled={busy}
-                    onClick={() =>
-                      void action(async () => {
-                        const result = await call("skin:saveEdited", {
-                          id: accountId,
-                          dataUrl: editedData(),
-                          variant,
-                        });
-                        setEditorOpen(false);
-                        setLocalSkin(null);
-                        setProfile(result);
-                        notify("编辑后的皮肤已同步至正版账号。");
-                      })
-                    }
-                  >
-                    {busy ? (
-                      <LoaderCircle size={14} className="wardrobe-spin" />
-                    ) : (
-                      <Upload size={14} />
-                    )}{" "}
-                    同步正版账号
-                  </button>
-                )}
-              </div>
-            </footer>
-          </GlassSurface>
-        </div>
+              )}
+            </div>
+          </footer>
+        </Modal>
       )}
     </div>
   );

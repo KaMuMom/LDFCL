@@ -12,9 +12,9 @@
   min-width: 0;
   margin: 0;
   padding: 19px;
-  border: 1px solid rgba(176, 199, 232, 0.25);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.38);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-raised);
 }
 
 .game-option-label {
@@ -28,13 +28,13 @@
 
 .game-options-fields .game-option-card label {
   margin: 0;
-  color: #506785;
+  color: var(--muted);
   font-size: 12px;
   font-weight: 500;
 }
 
 .game-option-label output {
-  color: #5e82c5;
+  color: var(--muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
@@ -43,7 +43,7 @@
   width: 100%;
   min-width: 0;
   margin: 3px 0;
-  accent-color: #5e87e5;
+  accent-color: var(--accent);
 }
 
 .game-options-fields .game-option-card select {
@@ -61,10 +61,10 @@
   min-height: 65px;
   margin: 0;
   padding: 17px 19px;
-  border: 1px solid rgba(176, 199, 232, 0.25);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.38);
-  color: #506785;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-raised);
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -91,14 +91,10 @@
   width: 46px;
   height: 48px;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.85);
-  border-radius: 16px;
-  background: linear-gradient(
-    145deg,
-    rgba(216, 232, 255, 0.75),
-    rgba(229, 222, 252, 0.6)
-  );
-  color: #6b8ac6;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: linear-gradient(145deg, var(--surface-soft), var(--surface-soft));
+  color: var(--muted);
 }
 
 .general-game-heading .eyebrow {
@@ -108,7 +104,7 @@
 
 .general-game-heading h3 {
   margin: 6px 0 0;
-  color: #243d5d;
+  color: var(--text);
   font-size: 16px;
   font-weight: 600;
 }
@@ -119,7 +115,7 @@
   align-items: center;
   gap: 20px;
   padding: 18px 0 20px;
-  border-bottom: 1px solid rgba(155, 180, 215, 0.18);
+  border-bottom: 1px solid var(--border);
 }
 
 .general-game-switch > div {
@@ -127,14 +123,14 @@
 }
 
 .general-game-switch strong {
-  color: #4d6585;
+  color: var(--muted);
   font-size: 12px;
   font-weight: 600;
 }
 
 .general-game-switch p {
   margin: 7px 0 0;
-  color: #8493aa;
+  color: var(--muted);
   font-size: 11px;
   line-height: 1.8;
 }

@@ -53,6 +53,7 @@ export interface Settings {
   downloadSource?: "official" | "bmclapi";
   theme?: "light" | "dark" | "system";
   interfacePerformance?: "efficient" | "quality";
+  interfaceMotion?: "system" | "full" | "reduced";
   gamePreset?: "custom" | "performance" | "balanced" | "quality" | "cinematic";
 }
 export interface FavoriteMod {

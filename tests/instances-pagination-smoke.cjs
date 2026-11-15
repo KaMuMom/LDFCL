@@ -126,6 +126,7 @@ const { chromium } = require("playwright-core");
     await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/`);
     const dock = page.locator("aside.sidebar");
     await dock.getByRole("button", { name: "游戏实例", exact: true }).click();
+    await page.getByRole("tab", {name:"Mod 管理",exact:true}).click();
     await page.waitForFunction(
       () => document.querySelectorAll(".mod-row").length === 50,
     );

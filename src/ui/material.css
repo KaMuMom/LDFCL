@@ -1,0 +1,65 @@
+/* Normalize the package's centered demo layout into a decorative panel layer. */
+.glass-surface {
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.glass-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  contain: layout paint;
+  isolation: isolate;
+  clip-path: inset(0 round var(--glass-radius, 24px));
+}
+/* The upstream pill demo adds sibling shadow/highlight layers. Panel borders
+   are drawn below; keep only its refracting renderer inside this paint root. */
+.glass-backdrop > :not(.liquid-renderer) {
+  display: none !important;
+}
+.glass-backdrop > .liquid-renderer {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  transform: none !important;
+  pointer-events: none !important;
+}
+.glass-backdrop .liquid-renderer > .glass {
+  display: flex !important;
+  width: 100%;
+  height: 100%;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: inherit !important;
+}
+.glass-backdrop .glass > div {
+  width: 100%;
+  height: 100%;
+  font: inherit !important;
+  text-shadow: none !important;
+}
+.glass-backdrop .glass__warp {
+  border-radius: inherit;
+}
+.glass-backdrop .liquid-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.glass-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  box-shadow: none;
+}
+
+html[data-performance="quality"] .glass-surface { background:transparent; }

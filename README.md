@@ -1,3 +1,16 @@
+# LDFCL 0.7.0 · 现代工作区
+
+本地重构版：全部功能按「游戏、资源、个人、工具」重新组织。统一浅深色云母配色、页面/标签/弹窗动效；独立账号管理，设置拆分为七类，新增 Ctrl+K 功能搜索和减少动态效果选项。默认面向入门电脑的轻量材质，保留按需皮肤渲染、分页及原有业务服务。
+
+- 可执行程序及完整源码：`release/0.7.0/`。这是本地构建，GitHub Latest 仍以在线发行页为准。
+- [功能与结构说明](docs/0.7.0_REFACTOR.md) · [当前完整功能](docs/CURRENT_FEATURES_AND_IMPLEMENTATION.md) · [验证记录](VALIDATION.md)
+- 配置目录入口：启动器设置 → 数据与存储；游戏文件夹：启动器设置 → 游戏目录；更新：启动器设置 → 检查更新。
+- 账号与游戏继续保存在 EXE 旁的 `LDFCL-data`、`.minecraft`，已登记的其他目录和 `versions/<实例文件夹>` 隔离规则延续。
+
+下面保留历史发行说明与下载地址。
+
+---
+
 # LDFCL 0.6.5
 
 本版修复更新助手启动与新版就绪确认，增加失败恢复和结果记录，统一维护桌面 `LDFCL.lnk`，并将更新提示改为顶部弹窗。保留流畅优先、按需皮肤渲染、列表分页及既有游戏功能。使用与验证边界见 [0.6.5 发行说明](docs/0.6.5_RELEASE.md)，本地构建位于 `release/0.6.5/`。旧版更新器失效时需手动替换本版一次，保留原 EXE 文件名和旁边的数据目录。
@@ -35,7 +48,7 @@ Minecraft 版本、Mod、整合包、资源包和光影包统一放入「资源�
 - [Windows x64 便携版 EXE](https://github.com/KaMuMom/LDFCL/releases/download/v0.6.5/LDFCL-0.6.5-Windows-x64.exe)：运行环境随程序打包，无需安装 Node.js 或 .NET。
 - [完整源码 ZIP](https://github.com/KaMuMom/LDFCL/releases/download/v0.6.5/LDFCL-0.6.5-source.zip)：开发依赖不随源码归档附带，使用 `npm ci` 安装。
 - [SHA-256 校验值](https://github.com/KaMuMom/LDFCL/releases/download/v0.6.5/SHA256SUMS-0.6.5.txt)；[最终测试记录](https://github.com/KaMuMom/LDFCL/releases/download/v0.6.5/VALIDATION-0.6.5.md)。
-- 默认游戏目录是 **启动器 EXE 所在文件夹中的 `.minecraft`**，首次运行自动创建。账号与启动器配置保存在旁边的 **`LDFCL-data`**；「启动器设置 → 工作空间」可以查看和打开该目录。
+- 默认游戏目录是 **启动器 EXE 所在文件夹中的 `.minecraft`**，首次运行自动创建。账号与启动器配置保存在旁边的 **`LDFCL-data`**；「启动器设置 → 数据与存储」可以查看和打开该目录。
 
 发行文件的打包及最终成品验证状态见 [VALIDATION.md](VALIDATION.md)。
 

@@ -3,20 +3,20 @@
   max-height: calc(100vh - 56px);
   padding: 0;
   overflow: hidden;
-  border: 1px solid #ffffffc9;
-  border-radius: 28px;
-  color: #172c47;
-  background: #f2f7ffb8;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--text);
+  background: var(--surface-raised);
   box-shadow:
-    0 28px 90px #30497530,
-    inset 0 1px 0 #ffffff;
+    0 28px 90px #10281f14,
+    inset 0 1px 0 #10281f14;
 }
 .mod-install-dialog[open] {
   display: flex;
   flex-direction: column;
 }
 .mod-install-dialog::backdrop {
-  background: #344b7538;
+  background:var(--overlay);
   backdrop-filter: blur(10px) saturate(1.1);
 }
 .mod-install-heading,
@@ -28,7 +28,7 @@
   padding: 23px 26px;
 }
 .mod-install-heading {
-  border-bottom: 1px solid #b8cbe433;
+  border-bottom: 1px solid var(--border);
 }
 .mod-install-heading > div {
   flex: 1;
@@ -36,13 +36,13 @@
 }
 .mod-install-heading h2 {
   margin: 0 0 6px;
-  color: #172c47;
+  color: var(--text);
   font-size: 21px;
   font-weight: 650;
 }
 .mod-install-heading p {
   margin: 0;
-  color: #7a8ea9;
+  color: var(--muted);
   font-size: 12px;
   line-height: 1.7;
   overflow-wrap: anywhere;
@@ -57,7 +57,7 @@
 .mod-install-body label {
   display: grid;
   gap: 9px;
-  color: #5d7391;
+  color: var(--muted);
   font-size: 12px;
   font-weight: 600;
 }
@@ -67,7 +67,7 @@
 }
 .mod-install-body p {
   margin: 0;
-  color: #8394ae;
+  color: var(--muted);
   font-size: 11px;
   line-height: 1.7;
 }
@@ -89,12 +89,12 @@
 }
 .mod-install-footer {
   justify-content: space-between;
-  border-top: 1px solid #b8cbe438;
-  background: #ffffff35;
+  border-top: 1px solid var(--border);
+  background: var(--surface-raised);
   font-size: 11px;
 }
 .mod-install-footer > span {
-  color: #8b9bb1;
+  color: var(--muted);
 }
 .mod-install-footer .btn {
   flex-shrink: 0;
