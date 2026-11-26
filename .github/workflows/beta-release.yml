@@ -20,6 +20,7 @@ concurrency:
 
 jobs:
   windows-x64:
+    if: ${{ false }}
     name: Build and publish Windows x64
     runs-on: windows-2022
     timeout-minutes: 30
