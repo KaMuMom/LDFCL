@@ -116,7 +116,7 @@ jobs:
             if ((Get-ItemProperty $registry).gameDirectory -ne $gameRoot) { throw 'Installer did not store the selected .minecraft directory' }
             $versions = & (Join-Path $appRoot 'bin/ldfcl-cli.exe') list --game-dir $gameRoot
             if ($LASTEXITCODE -ne 0 -or $versions -ne 'fixture') { throw 'Installed launcher did not discover the reused version' }
-            $env:QT_QPA_PLATFORM = 'offscreen'
+            $env:QT_QPA_PLATFORM = 'windows'
             $env:QT_QUICK_BACKEND = 'software'
             $app = Start-Process (Join-Path $appRoot 'bin/LDFCL.exe') -PassThru
             Start-Sleep -Seconds 3
