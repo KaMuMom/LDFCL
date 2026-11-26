@@ -8,7 +8,7 @@
 namespace fs = std::filesystem;
 
 int verify(const std::vector<std::string>& args) {
-  const auto root = fs::current_path();
+  const auto working_directory = fs::current_path();
   std::map<std::string, std::string> flags;
   std::string classpath;
   fs::path natives;
@@ -29,14 +29,22 @@ int verify(const std::vector<std::string>& args) {
   constexpr auto separator = ":";
 #endif
   const auto& version = flags["--version"];
-  const auto jar = root / "versions" / version / (version + ".jar");
+  const bool isolated = version == "pcl-fabric" || version == "hmcl-local";
+  const auto root = isolated ? working_directory.parent_path().parent_path() : working_directory;
+  const auto base = version == "legacy" ? "legacy" : "modern";
+  const auto jar = root / "versions" / base / (std::string(base) + ".jar");
   const auto library = root / "libraries" / "com" / "fixture" / "base" / "1.0" / "base-1.0.jar";
+  const auto loader = root / "libraries" / "com" / "fixture" / "loader" / "1.0" / "loader-1.0.jar";
+  const auto expected_classpath = (version == "pcl-fabric" ? loader.u8string() + separator : "") +
+      library.u8string() + separator + jar.u8string();
   const bool legacy = version == "legacy";
   if (!main_class || (!legacy && !platform_argument) ||
-      classpath != library.u8string() + separator + jar.u8string() ||
+      classpath != expected_classpath ||
       flags["--username"] != "Player" ||
-      flags["--gameDir"] != root.u8string() ||
+      flags["--gameDir"] != working_directory.u8string() ||
+      (isolated && working_directory != root / "versions" / version) ||
       flags["--accessToken"] != "0" ||
+      (version == "pcl-fabric" && flags["--loader"] != "fabric") ||
       (!legacy && (flags["--assetIndex"] != "fixture" || flags["--literal"] != "with space \"quote\" \\")) ||
       flags.count("--demo") || flags.count("--foreign")) {
     std::cerr << "Wrong Java arguments or working directory\n";
@@ -47,7 +55,7 @@ int verify(const std::vector<std::string>& args) {
     std::cerr << "Native library missing or exclusion ignored (" << natives.u8string() << ")\n";
     return 42;
   }
-  std::ofstream(root / "native-location.txt") << natives.u8string();
+  std::ofstream(working_directory / "native-location.txt") << natives.u8string();
   std::cout << "Started " << version << " successfully\n";
   return 0;
 }

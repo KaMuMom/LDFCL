@@ -12,7 +12,7 @@ ctest --test-dir out -C Release --output-on-failure
 
 单配置生成器的 Linux 图形程序位于 `out/ui/LDFCL`。Windows 使用 `cmake --install out --config Release --prefix "$PWD/package"` 部署后，运行 `package/bin/LDFCL.exe`。安装脚本会部署所需的 Qt 库、平台插件和 QML 模块。
 
-首次启动时，从「游戏目录」选择已安装 Minecraft 的目录。然后选择版本和兼容的 `java`、`java.exe` 或 `javaw.exe`，点击「启动游戏」。默认目录随系统选择，Java 会尝试从 `JAVA_HOME` 或 `PATH` 查找。Java 的输出保存在游戏目录中的 `ldfcl-launch.log`。
+Windows 安装程序可以创建空游戏目录，或直接使用已有的 PCL／HMCL 游戏目录。选择包含 `versions` 的 `.minecraft`，也可选择它所在的启动器文件夹。安装和卸载都保留已有游戏文件。游戏目录、Java 路径和隔离方式位于「设置」。首页提供版本下拉框和启动按钮。Java 会尝试从 `JAVA_HOME` 或 `PATH` 查找，输出保存在游戏目录中的 `ldfcl-launch.log`。
 
 ## 命令行版
 
@@ -25,4 +25,4 @@ cmake --build out-cli
 ./out-cli/ldfcl-cli launch 1.21.1 --game-dir "/path/to/.minecraft" --java "/path/to/jdk-21/bin/java"
 ```
 
-游戏客户端、资源及依赖需由官方启动器预先安装。当前支持独立原版版本的离线启动。正版登录、下载安装和需要继承版本元数据的模组加载器留待后续开发。
+原版和具备完整本地依赖的继承版本均可列出，启动时使用离线身份。自动隔离读取 PCL 的实例隔离设置与 HMCL 的实例目录标记，并参考实例中的存档、模组和资源包。隔离实例从自身目录运行，同时共享游戏根下的 `assets` 和 `libraries`。HMCL 配置中的外部自定义运行路径和需要额外安装或修补的加载器不在当前兼容范围。目录说明参见 [HMCL 全局版本隔离](https://docs.hmcl.net/launcher/isolation.html)。

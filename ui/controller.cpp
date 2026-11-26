@@ -1,6 +1,7 @@
 #include "controller.hpp"
 
 #include <QtConcurrentRun>
+#include <QSettings>
 
 namespace {
 QUrl file_url(const ldfcl::fs::path& path) {
@@ -15,6 +16,13 @@ ldfcl::fs::path local_path(const QUrl& url) {
 LauncherController::LauncherController()
     : game_folder_(file_url(ldfcl::default_game_directory())),
       java_(file_url(ldfcl::default_java())) {
+  QSettings settings;
+  const auto root = settings.value("gameDirectory").toString();
+  const auto java = settings.value("javaExecutable").toString();
+  const auto layout = settings.value("gameLayout", 0).toInt();
+  if (!root.isEmpty()) game_folder_ = QUrl::fromLocalFile(root);
+  if (!java.isEmpty()) java_ = QUrl::fromLocalFile(java);
+  if (layout >= 0 && layout <= 2) layout_ = static_cast<ldfcl::GameLayout>(layout);
   connect(&launch_, &QFutureWatcher<QString>::finished, this, [this] {
     running_ = false;
     setStatus(launch_.result());
@@ -29,7 +37,13 @@ QString LauncherController::localPath(const QUrl& url) const {
 
 void LauncherController::setGameFolder(const QUrl& url) {
   if (running_ || !url.isLocalFile()) return;
-  game_folder_ = url;
+  try {
+    game_folder_ = file_url(ldfcl::resolve_game_directory(local_path(url)));
+  } catch (const std::exception& error) {
+    setStatus(QString::fromUtf8(error.what()));
+    return;
+  }
+  QSettings().setValue("gameDirectory", game_folder_.toLocalFile());
   emit gameFolderChanged();
   refreshVersions();
 }
@@ -37,8 +51,16 @@ void LauncherController::setGameFolder(const QUrl& url) {
 void LauncherController::setJavaExecutable(const QUrl& url) {
   if (running_ || !url.isLocalFile()) return;
   java_ = url;
+  QSettings().setValue("javaExecutable", java_.toLocalFile());
   emit javaExecutableChanged();
   setStatus(versions_.empty() ? tr("此目录没有已安装的游戏版本。") : tr("使用离线身份 Player。"));
+}
+
+void LauncherController::setGameLayout(int layout) {
+  if (running_ || layout < 0 || layout > 2 || layout == gameLayout()) return;
+  layout_ = static_cast<ldfcl::GameLayout>(layout);
+  QSettings().setValue("gameLayout", layout);
+  emit gameLayoutChanged();
 }
 
 void LauncherController::setStatus(QString status) {
@@ -68,9 +90,10 @@ void LauncherController::launchGame(const QString& version) {
   running_ = true;
   emit runningChanged();
   setStatus(tr("正在启动或运行游戏…"));
-  launch_.setFuture(QtConcurrent::run([root, java, id = version.toUtf8().toStdString()] {
+  launch_.setFuture(QtConcurrent::run([root, java, layout = layout_, id = version.toUtf8().toStdString()] {
     try {
-      const auto code = ldfcl::launch(root, id, java, root / "ldfcl-launch.log");
+      const auto game_root = ldfcl::resolve_game_directory(root);
+      const auto code = ldfcl::launch(game_root, id, java, game_root / "ldfcl-launch.log", layout);
       return code == 0 ? tr("游戏已退出。")
                        : tr("Java 退出码 %1。请查看 ldfcl-launch.log。").arg(code);
     } catch (const std::exception& error) {

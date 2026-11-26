@@ -12,10 +12,10 @@ permissions:
   contents: write
 
 env:
-  RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.0' }}
+  RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.1' }}
 
 concurrency:
-  group: release-${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.0' }}
+  group: release-${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.1' }}
   cancel-in-progress: true
 
 jobs:
@@ -69,13 +69,69 @@ jobs:
                 throw "Missing deployment file: $file"
               }
             }
-            $archive = "LDFCL-${env:RELEASE_TAG}-Windows-x64.zip"
-            Compress-Archive -Path package/* -DestinationPath $archive
-            $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
-            Set-Content -Encoding ascii "${archive}.sha256" "$hash  $archive"
           } catch {
             $detail = $_.Exception.Message -replace '\r?\n', '%0A'
             Write-Host "::error title=Stage Windows package::$detail"
+            exit 1
+          }
+
+      - name: Compile and test the Windows installer
+        run: |
+          try {
+            $packageRoot = Join-Path $PWD.Path 'package'
+            $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+            $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+            $redist = Get-ChildItem (Join-Path $vs 'VC/Redist/MSVC') -Directory |
+              ForEach-Object { Join-Path $_.FullName 'x64/Microsoft.VC143.CRT' } |
+              Where-Object { Test-Path $_ } | Sort-Object -Descending | Select-Object -First 1
+            if (-not $redist) { throw 'Visual C++ runtime redistributables are missing' }
+            Copy-Item "$redist/*.dll" package/bin/
+            $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
+            if (-not (Test-Path $iscc)) {
+              choco install innosetup --no-progress -y
+              if ($LASTEXITCODE -ne 0) { throw 'Could not install Inno Setup' }
+            }
+            $output = & $iscc "/DReleaseTag=$env:RELEASE_TAG" "/DSourceRoot=$packageRoot" "/DOutputRoot=$($PWD.Path)" packaging/LDFCL.iss 2>&1
+            $code = $LASTEXITCODE
+            $output | ForEach-Object { Write-Host $_ }
+            if ($code -ne 0) { throw (($output | Select-Object -Last 24) -join '%0A') }
+
+            $setup = "LDFCL-${env:RELEASE_TAG}-Windows-x64-Setup.exe"
+            $appRoot = Join-Path $env:RUNNER_TEMP 'LDFCL Install Test'
+            $previous = Join-Path $env:RUNNER_TEMP 'PCL Fixture'
+            $gameRoot = Join-Path $previous '.minecraft'
+            New-Item (Join-Path $gameRoot 'versions') -ItemType Directory -Force | Out-Null
+            $registry = 'HKCU:\Software\LDFCL\LDFCL'
+            $fixtureVersion = Join-Path $gameRoot 'versions/fixture'
+            New-Item $fixtureVersion -ItemType Directory -Force | Out-Null
+            Set-Content (Join-Path $fixtureVersion 'fixture.json') -Encoding ascii '{"mainClass":"fixture.Main","libraries":[]}'
+            Set-Content (Join-Path $fixtureVersion 'fixture.jar') -Encoding ascii 'Fixture client'
+            $setupArgs = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="{0}"' -f $appRoot))
+            $install = Start-Process (Join-Path $PWD.Path $setup) -ArgumentList $setupArgs -Wait -PassThru
+            if ($install.ExitCode -ne 0) { throw "Fresh install exited with code $($install.ExitCode)" }
+            $fresh = (Get-ItemProperty $registry).gameDirectory
+            if ($fresh -ne (Join-Path $env:LOCALAPPDATA 'LDFCL/game').Replace('/', '\')) { throw "Wrong fresh game directory: $fresh" }
+            $install = Start-Process (Join-Path $PWD.Path $setup) -ArgumentList ($setupArgs + ('/GAMEFOLDER="{0}"' -f $previous)) -Wait -PassThru
+            if ($install.ExitCode -ne 0) { throw "Reuse installation exited with code $($install.ExitCode)" }
+            if ((Get-ItemProperty $registry).gameDirectory -ne $gameRoot) { throw 'Installer did not store the selected .minecraft directory' }
+            $versions = & (Join-Path $appRoot 'bin/ldfcl-cli.exe') list --game-dir $gameRoot
+            if ($LASTEXITCODE -ne 0 -or $versions -ne 'fixture') { throw 'Installed launcher did not discover the reused version' }
+            $env:QT_QPA_PLATFORM = 'offscreen'
+            $env:QT_QUICK_BACKEND = 'software'
+            $app = Start-Process (Join-Path $appRoot 'bin/LDFCL.exe') -PassThru
+            Start-Sleep -Seconds 3
+            if ($app.HasExited) { throw "Installed GUI exited early with code $($app.ExitCode)" }
+            Stop-Process -Id $app.Id
+            $uninstall = Get-ChildItem $appRoot -Filter 'unins*.exe' | Select-Object -First 1
+            $result = Start-Process $uninstall.FullName -ArgumentList '/VERYSILENT', '/NORESTART' -Wait -PassThru
+            if ($result.ExitCode -ne 0 -or -not (Test-Path (Join-Path $fixtureVersion 'fixture.jar'))) {
+              throw 'Uninstall failed or modified the imported game folder'
+            }
+            $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
+            Set-Content -Encoding ascii "${setup}.sha256" "$hash  $setup"
+          } catch {
+            $detail = $_.Exception.Message -replace '\r?\n', '%0A'
+            Write-Host "::error title=Build and verify Windows installer::$detail"
             exit 1
           }
 
@@ -83,7 +139,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          $setup = "LDFCL-${env:RELEASE_TAG}-Windows-x64-Setup.exe"
           gh release view $env:RELEASE_TAG --json tagName 2>$null
           if ($LASTEXITCODE -eq 0) { exit 0 }
-          $archive = "LDFCL-${env:RELEASE_TAG}-Windows-x64.zip"
-          gh release create $env:RELEASE_TAG $archive "${archive}.sha256" --verify-tag --prerelease --title "LDFCL ${env:RELEASE_TAG}" --notes "Windows x64 预发行版。解压后打开 bin/LDFCL.exe，选择本地已安装的 Minecraft 版本和兼容的 Java。"
+          gh release create $env:RELEASE_TAG $setup "${setup}.sha256" --verify-tag --prerelease --title "LDFCL ${env:RELEASE_TAG}" --notes "Windows x64 安装程序。可全新安装，或选择 PCL／HMCL 的游戏目录，直接使用已有版本与存档。"

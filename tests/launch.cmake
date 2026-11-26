@@ -1,4 +1,6 @@
 file(REMOVE_RECURSE "${WORK}")
+set(parent "${WORK}")
+set(WORK "${WORK}/.minecraft")
 set(common "${WORK}/libraries/com/fixture/base/1.0")
 file(MAKE_DIRECTORY "${common}" "${WORK}/versions/modern" "${WORK}/versions/legacy")
 file(WRITE "${common}/base-1.0.jar" "test library")
@@ -55,22 +57,37 @@ set(legacy [=[
 ]=])
 string(CONFIGURE "${legacy}" legacy @ONLY)
 file(WRITE "${WORK}/versions/legacy/legacy.json" "${legacy}")
+file(WRITE "${WORK}/libraries/com/fixture/loader/1.0/loader-1.0.jar" "test loader")
+file(WRITE "${WORK}/versions/pcl-fabric/pcl-fabric.json"
+  [[{"inheritsFrom":"modern","libraries":[{"name":"com.fixture:loader:1.0"}],"arguments":{"game":["--loader","fabric"]}}]])
+file(WRITE "${WORK}/versions/pcl-fabric/PCL/Setup.ini" "VersionArgumentIndieV2:True\r\n")
+file(WRITE "${WORK}/versions/pcl-shared/pcl-shared.json" [[{"inheritsFrom":"modern"}]])
+file(WRITE "${WORK}/versions/pcl-shared/PCL/Setup.ini" "VersionArgumentIndieV2:False\r\n")
+file(MAKE_DIRECTORY "${WORK}/versions/pcl-shared/saves")
+file(WRITE "${WORK}/versions/hmcl-local/hmcl-local.json" [[{"inheritsFrom":"modern"}]])
+file(WRITE "${WORK}/versions/hmcl-local/.hmcl/config/instance-game-settings.json"
+  [[{"overrideProperties":["runningDirectory"],"runningDirectory":""}]])
+file(WRITE "${WORK}/versions/loop/loop.json" [[{"inheritsFrom":"loop"}]])
 
-execute_process(COMMAND "${LAUNCHER}" list --game-dir "${WORK}"
+execute_process(COMMAND "${LAUNCHER}" list --game-dir "${parent}"
   OUTPUT_VARIABLE versions COMMAND_ERROR_IS_FATAL ANY
 )
-if(NOT versions STREQUAL "modern\nlegacy\n")
+if(NOT versions STREQUAL "pcl-shared\npcl-fabric\nmodern\nlegacy\nhmcl-local\n")
   message(FATAL_ERROR "Incorrect version list: ${versions}")
 endif()
 
-foreach(version modern legacy)
-  execute_process(COMMAND "${LAUNCHER}" launch "${version}" --game-dir "${WORK}" --java "${JAVA}"
+foreach(version modern legacy pcl-fabric hmcl-local pcl-shared)
+  execute_process(COMMAND "${LAUNCHER}" launch "${version}" --game-dir "${parent}" --java "${JAVA}"
     OUTPUT_VARIABLE output COMMAND_ERROR_IS_FATAL ANY
   )
   if(NOT output MATCHES "Started ${version} successfully")
     message(FATAL_ERROR "Java fixture did not start: ${output}")
   endif()
-  file(READ "${WORK}/native-location.txt" native_dir)
+  if(version STREQUAL "pcl-fabric" OR version STREQUAL "hmcl-local")
+    file(READ "${WORK}/versions/${version}/native-location.txt" native_dir)
+  else()
+    file(READ "${WORK}/native-location.txt" native_dir)
+  endif()
   if(EXISTS "${native_dir}")
     message(FATAL_ERROR "Temporary natives were not removed")
   endif()

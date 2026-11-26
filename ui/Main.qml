@@ -22,6 +22,8 @@ ApplicationWindow {
         defaultFocusColor: "#19734f"
     }
 
+    property bool settingsOpen: false
+
     component PathRow: RowLayout {
         required property string pathText
         required property string fieldName
@@ -58,19 +60,32 @@ ApplicationWindow {
         anchors.centerIn: parent
         spacing: 18
 
-        ColumnLayout {
-            spacing: 5
-            Text {
-                text: "LDFCL"
-                color: launcherTheme.focusColor
-                font.pixelSize: 13
-                font.bold: true
+        RowLayout {
+            Layout.fillWidth: true
+            ColumnLayout {
+                spacing: 5
+                Text { text: "LDFCL"; color: launcherTheme.focusColor; font.bold: true }
+                Text {
+                    text: window.settingsOpen ? qsTr("设置") : qsTr("Minecraft 启动器")
+                    color: launcherTheme.textColor
+                    font.pixelSize: 32
+                    font.bold: true
+                }
             }
-            Text {
-                text: qsTr("Minecraft 启动器")
-                color: launcherTheme.textColor
-                font.pixelSize: 34
-                font.bold: true
+            Item { Layout.fillWidth: true }
+            EButton {
+                objectName: "settingsButton"
+                theme: launcherTheme
+                text: window.settingsOpen ? qsTr("返回首页") : qsTr("设置")
+                size: "s"
+                radius: 11
+                containerColor: launcherTheme.primaryColor
+                shadowEnabled: false
+                onClicked: {
+                    versionPicker.opened = false
+                    layoutPicker.opened = false
+                    window.settingsOpen = !window.settingsOpen
+                }
             }
         }
 
@@ -80,61 +95,67 @@ ApplicationWindow {
             cardColor: launcherTheme.primaryColor
             padding: 22
             shadowEnabled: false
+            visible: !window.settingsOpen
+            z: versionPicker.opened ? 2 : 0
 
-            ColumnLayout {
+            Label { text: qsTr("游戏版本"); color: launcherTheme.textColor; font.bold: true }
+            EDropdown {
+                id: versionPicker
+                objectName: "versionPicker"
+                theme: launcherTheme
                 Layout.fillWidth: true
-                spacing: 7
+                Layout.preferredHeight: 46
+                title: qsTr("没有可启动的版本")
+                headerHeight: 46
+                popupMaxHeight: 180
+                radius: 11
+                shadowEnabled: false
+                enabled: !window.launcher.running && model.length > 0
+                model: Array.from(window.launcher.versions, name => ({text: name}))
+                onModelChanged: {
+                    opened = false
+                    selectedIndex = model.length ? 0 : -1
+                }
+            }
+        }
 
-                Label { text: qsTr("游戏目录"); color: launcherTheme.textColor; font.bold: true }
-                PathRow {
-                    Layout.fillWidth: true
-                    pathText: window.launcher.localPath(window.launcher.gameFolder)
-                    fieldName: qsTr("游戏目录")
-                    enabled: !window.launcher.running
-                    onBrowse: gameDialog.open()
-                }
-                Label {
-                    Layout.topMargin: 8
-                    text: qsTr("游戏版本")
-                    color: launcherTheme.textColor
-                    font.bold: true
-                }
-                EDropdown {
-                    id: versionPicker
-                    objectName: "versionPicker"
-                    theme: launcherTheme
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 42
-                    z: opened ? 2 : 0
-                    title: qsTr("请选择已安装的版本")
-                    headerHeight: 42
-                    popupMaxHeight: 150
-                    radius: 11
-                    shadowEnabled: false
-                    enabled: !window.launcher.running && model.length > 0
-                    model: Array.from(window.launcher.versions, name => ({text: name}))
-                    Component.onCompleted: selectedIndex = model.length ? 0 : -1
-                    Connections {
-                        target: window.launcher
-                        function onVersionsChanged() {
-                            versionPicker.opened = false
-                            versionPicker.selectedIndex = versionPicker.model.length ? 0 : -1
-                        }
-                    }
-                }
-                Label {
-                    Layout.topMargin: 8
-                    text: qsTr("Java 可执行文件")
-                    color: launcherTheme.textColor
-                    font.bold: true
-                }
-                PathRow {
-                    Layout.fillWidth: true
-                    pathText: window.launcher.localPath(window.launcher.javaExecutable)
-                    fieldName: qsTr("Java 可执行文件")
-                    enabled: !window.launcher.running
-                    onBrowse: javaDialog.open()
-                }
+        ECard {
+            theme: launcherTheme
+            Layout.fillWidth: true
+            cardColor: launcherTheme.primaryColor
+            padding: 22
+            shadowEnabled: false
+            visible: window.settingsOpen
+            enabled: !window.launcher.running
+
+            Label { text: qsTr("游戏目录"); color: launcherTheme.textColor; font.bold: true }
+            PathRow {
+                Layout.fillWidth: true
+                pathText: window.launcher.localPath(window.launcher.gameFolder)
+                fieldName: qsTr("游戏目录")
+                onBrowse: gameDialog.open()
+            }
+            Label { text: qsTr("Java 可执行文件"); color: launcherTheme.textColor; font.bold: true }
+            PathRow {
+                Layout.fillWidth: true
+                pathText: window.launcher.localPath(window.launcher.javaExecutable)
+                fieldName: qsTr("Java 可执行文件")
+                onBrowse: javaDialog.open()
+            }
+            Label { text: qsTr("版本隔离"); color: launcherTheme.textColor; font.bold: true }
+            EDropdown {
+                id: layoutPicker
+                theme: launcherTheme
+                Layout.fillWidth: true
+                Layout.preferredHeight: 42
+                headerHeight: 42
+                popupDirection: 1
+                z: opened ? 2 : 0
+                radius: 11
+                shadowEnabled: false
+                model: [{text: qsTr("自动识别")}, {text: qsTr("共享游戏目录")}, {text: qsTr("各实例独立")}]
+                selectedIndex: window.launcher.gameLayout
+                onSelectionChanged: function(index) { window.launcher.gameLayout = index }
             }
         }
 
@@ -150,12 +171,13 @@ ApplicationWindow {
             }
             EButton {
                 objectName: "launchButton"
+                visible: !window.settingsOpen
                 theme: launcherTheme
                 text: window.launcher.running ? qsTr("运行中…") : qsTr("启动游戏")
                 containerColor: enabled ? launcherTheme.focusColor : "#71857a"
                 textColor: "white"
-                size: "s"
-                radius: 12
+                size: "m"
+                radius: 14
                 shadowEnabled: false
                 enabled: !window.launcher.running
                          && versionPicker.selectedIndex >= 0

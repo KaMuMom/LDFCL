@@ -6,6 +6,7 @@
 
 int main(int argc, char** argv) {
   QGuiApplication app(argc, argv);
+  QCoreApplication::setOrganizationName("LDFCL");
   QCoreApplication::setApplicationName("LDFCL");
   QQuickStyle::setStyle("Basic");
 

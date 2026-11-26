@@ -5,11 +5,13 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cctype>
 #include <cstdlib>
 #include <fstream>
 #include <map>
 #include <memory>
 #include <regex>
+#include <set>
 #include <sstream>
 #include <string_view>
 
@@ -118,6 +120,121 @@ Json read_json(const fs::path& file) {
   }
 }
 
+std::string library_key(const Json& library) {
+  const auto name = library.at("name").get<std::string>();
+  const auto extension = name.find('@');
+  const auto parts = split(std::string_view(name).substr(0, extension), ':');
+  if (parts.size() < 3) throw Error("Invalid library: " + name);
+  return parts[0] + ':' + parts[1] + ':' + (parts.size() > 3 ? parts[3] : "") +
+      (extension == std::string::npos ? "@jar" : name.substr(extension));
+}
+
+struct LocalVersion {
+  Json metadata;
+  fs::path jar;
+};
+
+LocalVersion load_version(const fs::path& root, const std::string& id,
+                          std::vector<std::string> chain = {}) {
+  if (!valid_segment(id) || chain.size() >= 32 ||
+      std::find(chain.begin(), chain.end(), id) != chain.end())
+    throw Error("Invalid or cyclic version inheritance: " + id);
+  chain.push_back(id);
+  const auto folder = root / "versions" / fs::u8path(id);
+  auto child = read_json(folder / fs::u8path(id + ".json"));
+  auto jar = folder / fs::u8path(id + ".jar");
+  if (child.contains("jar")) {
+    const auto jar_id = child.at("jar").get<std::string>();
+    if (!valid_segment(jar_id)) throw Error("Invalid client JAR: " + jar_id);
+    jar = root / "versions" / fs::u8path(jar_id) / fs::u8path(jar_id + ".jar");
+  }
+  if (!child.contains("inheritsFrom")) return {std::move(child), std::move(jar)};
+
+  auto parent = load_version(root, child.at("inheritsFrom").get<std::string>(), std::move(chain));
+  if (!child.contains("jar") && !fs::is_regular_file(jar)) jar = parent.jar;
+
+  auto libraries = Json::array();
+  std::set<std::string> child_libraries;
+  for (const auto& library : child.value("libraries", Json::array())) {
+    child_libraries.insert(library_key(library));
+    libraries.push_back(library);
+  }
+  for (const auto& library : parent.metadata.value("libraries", Json::array())) {
+    if (!child_libraries.count(library_key(library))) libraries.push_back(library);
+  }
+
+  auto arguments = parent.metadata.value("arguments", Json::object());
+  for (const auto& part : {"jvm", "game"}) {
+    for (const auto& token : child.value("arguments", Json::object()).value(part, Json::array())) {
+      arguments[part].push_back(token);
+    }
+  }
+  parent.metadata.update(child);
+  parent.metadata["libraries"] = std::move(libraries);
+  if (child.contains("minecraftArguments") && !child.contains("arguments")) arguments.erase("game");
+  if (!arguments.empty()) parent.metadata["arguments"] = std::move(arguments);
+  else parent.metadata.erase("arguments");
+  return {std::move(parent.metadata), std::move(jar)};
+}
+
+GameLayout pcl_layout(const fs::path& folder) {
+  std::ifstream config(folder / "PCL" / "Setup.ini");
+  GameLayout legacy = GameLayout::automatic;
+  for (std::string line; std::getline(config, line);) {
+    if (line.rfind("\xef\xbb\xbf", 0) == 0) line.erase(0, 3);
+    const auto separator = line.find_first_of(":=");
+    if (separator == std::string::npos) continue;
+    const auto key = line.substr(0, separator);
+    auto value = line.substr(separator + 1);
+    const auto first = value.find_first_not_of(" \t\r");
+    if (first == std::string::npos) continue;
+    value = value.substr(first, value.find_last_not_of(" \t\r") - first + 1);
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (key == "VersionArgumentIndieV2") {
+      if (value == "true" || value == "1") return GameLayout::isolated;
+      if (value == "false" || value == "0") return GameLayout::shared;
+    }
+    if (key == "VersionArgumentIndie") {
+      if (value == "1") legacy = GameLayout::isolated;
+      if (value == "2") legacy = GameLayout::shared;
+    }
+  }
+  return legacy;
+}
+
+bool uses_instance_directory(const fs::path& folder, GameLayout layout) {
+  if (layout == GameLayout::automatic) layout = pcl_layout(folder);
+  if (layout != GameLayout::automatic) return layout == GameLayout::isolated;
+  const auto hmcl_config = folder / ".hmcl" / "config" / "instance-game-settings.json";
+  if (fs::is_regular_file(hmcl_config)) {
+    try {
+      const auto settings = read_json(hmcl_config);
+      const auto overrides = settings.value("overrideProperties", Json::array());
+      if (std::find(overrides.begin(), overrides.end(), "runningDirectory") != overrides.end() &&
+          settings.value("runningDirectory", std::string()).empty()) return true;
+    } catch (const std::exception&) {
+      // Older or unreadable settings still allow layout detection from local files.
+    }
+  }
+  const auto hmcl_legacy = folder / "hmclversion.cfg";
+  if (fs::is_regular_file(hmcl_legacy)) {
+    try {
+      const auto settings = read_json(hmcl_legacy);
+      if (!settings.value("usesGlobal", false)) {
+        const auto mode = settings.value("gameDirType", Json());
+        if (mode == 1 || mode == "VERSION_FOLDER") return true;
+        if (mode == 0 || mode == "ROOT_FOLDER") return false;
+      }
+    } catch (const std::exception&) {
+      // Try the instance's actual files if older settings cannot be read.
+    }
+  }
+  return fs::is_directory(folder / "saves") || fs::is_directory(folder / "mods") ||
+      fs::is_directory(folder / "resourcepacks") || fs::is_directory(folder / "shaderpacks") ||
+      fs::is_regular_file(folder / "options.txt");
+}
+
 bool matches_rule(const Json& rule) {
   if (const auto os = rule.find("os"); os != rule.end()) {
     if (os->contains("name") && os->at("name") != os_name) return false;
@@ -164,13 +281,15 @@ void append_arguments(std::vector<std::string>& args, const Json& entries) {
 }
 
 std::string maven_path(const std::string& name, const std::string& native = {}) {
-  const auto segments = split(name, ':');
+  const auto suffix = name.find('@');
+  const auto extension = suffix == std::string::npos ? "jar" : name.substr(suffix + 1);
+  const auto segments = split(std::string_view(name).substr(0, suffix), ':');
   if (segments.size() < 3 || segments.size() > 4) throw Error("Invalid library: " + name);
   auto group = segments[0];
   std::replace(group.begin(), group.end(), '.', '/');
   const auto classifier = !native.empty() ? native : segments.size() == 4 ? segments[3] : "";
   return group + '/' + segments[1] + '/' + segments[2] + '/' +
-      segments[1] + '-' + segments[2] + (classifier.empty() ? "" : '-' + classifier) + ".jar";
+      segments[1] + '-' + segments[2] + (classifier.empty() ? "" : '-' + classifier) + '.' + extension;
 }
 
 struct TemporaryNatives {
@@ -327,19 +446,26 @@ fs::path default_java() {
   return {};
 }
 
+fs::path resolve_game_directory(const fs::path& directory) {
+  const auto root = fs::absolute(directory).lexically_normal().make_preferred();
+  if (!fs::is_directory(root / "versions") && fs::is_directory(root / ".minecraft" / "versions"))
+    return root / ".minecraft";
+  return root;
+}
+
 std::vector<std::string> installed_versions(const fs::path& game_directory) {
   std::vector<std::string> result;
-  const auto versions = game_directory / "versions";
+  const auto root = resolve_game_directory(game_directory);
+  const auto versions = root / "versions";
   if (!fs::is_directory(versions)) return result;
   for (const auto& entry : fs::directory_iterator(versions)) {
     const auto id = entry.path().filename().u8string();
     const auto metadata = entry.path() / fs::u8path(id + ".json");
-    if (!entry.is_directory() || !valid_segment(id) || !fs::is_regular_file(metadata) ||
-        !fs::is_regular_file(entry.path() / fs::u8path(id + ".jar"))) continue;
+    if (!entry.is_directory() || !valid_segment(id) || !fs::is_regular_file(metadata)) continue;
     try {
-      const auto version = read_json(metadata);
-      if (version.contains("mainClass") && !version.contains("inheritsFrom")) result.push_back(id);
-    } catch (const Error&) {
+      const auto version = load_version(root, id);
+      if (version.metadata.contains("mainClass") && fs::is_regular_file(version.jar)) result.push_back(id);
+    } catch (const std::exception&) {
       // A broken metadata file should not hide other installed versions.
     }
   }
@@ -348,19 +474,16 @@ std::vector<std::string> installed_versions(const fs::path& game_directory) {
 }
 
 int launch(const fs::path& game_directory, const std::string& id, const fs::path& java,
-           const fs::path& log) {
+           const fs::path& log, GameLayout layout) {
   if (!valid_segment(id)) throw Error("Invalid version ID");
   if (java.empty()) throw Error("Choose an installed Java executable");
   const auto executable = fs::absolute(java).make_preferred();
   if (!fs::is_regular_file(executable))
     throw Error("Java executable not found: " + executable.u8string());
-  const auto root = fs::absolute(game_directory).make_preferred();
+  const auto root = resolve_game_directory(game_directory);
   const auto directory = root / "versions" / fs::u8path(id);
-  const auto version = read_json(directory / fs::u8path(id + ".json"));
-  if (version.contains("inheritsFrom"))
-    throw Error("Choose a standalone vanilla Minecraft version");
-  const auto jar = directory / fs::u8path(id + ".jar");
-  require_file(jar);
+  const auto instance = uses_instance_directory(directory, layout) ? directory : root;
+  const auto [version, jar] = load_version(root, id);
   const auto assets = root / "assets";
   const auto index_id = version.value("assetIndex", Json::object()).value(
       "id", version.value("assets", std::string("legacy")));
@@ -377,12 +500,12 @@ int launch(const fs::path& game_directory, const std::string& id, const fs::path
     {"auth_xuid", "0"}, {"clientid", "0"}, {"user_type", "legacy"},
     {"user_properties", "{}"}, {"profile_properties", "{}"},
     {"version_name", id}, {"version_type", version.value("type", std::string("release"))},
-    {"game_directory", root.u8string()}, {"assets_root", assets.u8string()},
+    {"game_directory", instance.u8string()}, {"assets_root", assets.u8string()},
     {"game_assets", (fs::is_directory(virtual_assets) ? virtual_assets : assets).u8string()},
     {"assets_index_name", index_id}, {"natives_directory", natives.path.u8string()},
     {"library_directory", (root / "libraries").u8string()}, {"classpath", classpath},
     {"classpath_separator", std::string(1, classpath_separator)},
-    {"launcher_name", "LDFCL"}, {"launcher_version", "1.0.0"},
+    {"launcher_name", "LDFCL"}, {"launcher_version", LDFCL_VERSION},
   };
 
   std::vector<std::string> args{"-Xmx2G"};
@@ -390,8 +513,9 @@ int launch(const fs::path& game_directory, const std::string& id, const fs::path
   // Mojang's legacy metadata does not always include this JVM flag on macOS.
   args.push_back("-XstartOnFirstThread");
 #endif
-  if (const auto arguments = version.find("arguments"); arguments != version.end()) {
-    append_arguments(args, arguments->value("jvm", Json::array()));
+  const auto arguments = version.find("arguments");
+  if (arguments != version.end() && arguments->contains("jvm")) {
+    append_arguments(args, arguments->at("jvm"));
   } else {
     args.insert(args.end(), {"-Djava.library.path=${natives_directory}", "-cp", "${classpath}"});
   }
@@ -407,13 +531,13 @@ int launch(const fs::path& game_directory, const std::string& id, const fs::path
     }
   }
   args.push_back(version.at("mainClass").get<std::string>());
-  if (const auto arguments = version.find("arguments"); arguments != version.end()) {
-    append_arguments(args, arguments->value("game", Json::array()));
-  } else {
+  if (arguments != version.end() && arguments->contains("game")) {
+    append_arguments(args, arguments->at("game"));
+  } else if (version.contains("minecraftArguments")) {
     std::istringstream tokens(version.at("minecraftArguments").get<std::string>());
     for (std::string token; tokens >> token;) args.push_back(std::move(token));
   }
   for (auto& arg : args) arg = expand(arg, values);
-  return run_process(executable, args, root, log);
+  return run_process(executable, args, instance, log);
 }
 }  // namespace ldfcl

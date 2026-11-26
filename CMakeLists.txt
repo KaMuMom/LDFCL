@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(LDFCL VERSION 1.0.0 LANGUAGES C CXX)
+project(LDFCL VERSION 1.0.1 LANGUAGES C CXX)
 
 include(FetchContent)
 set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
@@ -19,6 +19,7 @@ target_include_directories(ldfcl_zip PUBLIC "${miniz_SOURCE_DIR}")
 
 add_library(ldfcl_core STATIC src/launcher.cpp src/process.cpp)
 target_compile_features(ldfcl_core PUBLIC cxx_std_17)
+target_compile_definitions(ldfcl_core PRIVATE LDFCL_VERSION="${PROJECT_VERSION}")
 target_include_directories(ldfcl_core PUBLIC src)
 target_link_libraries(ldfcl_core PRIVATE nlohmann_json::nlohmann_json ldfcl_zip)
 if(MSVC)

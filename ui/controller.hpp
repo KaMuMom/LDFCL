@@ -14,6 +14,7 @@ class LauncherController : public QObject {
   Q_PROPERTY(QStringList versions READ versions NOTIFY versionsChanged)
   Q_PROPERTY(QString status READ status NOTIFY statusChanged)
   Q_PROPERTY(bool running READ running NOTIFY runningChanged)
+  Q_PROPERTY(int gameLayout READ gameLayout WRITE setGameLayout NOTIFY gameLayoutChanged)
 
  public:
   LauncherController();
@@ -23,6 +24,8 @@ class LauncherController : public QObject {
   QStringList versions() const { return versions_; }
   QString status() const { return status_; }
   bool running() const { return running_; }
+  int gameLayout() const { return static_cast<int>(layout_); }
+  void setGameLayout(int layout);
 
   Q_INVOKABLE QString localPath(const QUrl& url) const;
   Q_INVOKABLE void setGameFolder(const QUrl& url);
@@ -35,6 +38,7 @@ class LauncherController : public QObject {
   void versionsChanged();
   void statusChanged();
   void runningChanged();
+  void gameLayoutChanged();
 
  private:
   void refreshVersions();
@@ -44,5 +48,6 @@ class LauncherController : public QObject {
   QStringList versions_;
   QString status_;
   bool running_ = false;
+  ldfcl::GameLayout layout_ = ldfcl::GameLayout::automatic;
   QFutureWatcher<QString> launch_;
 };
