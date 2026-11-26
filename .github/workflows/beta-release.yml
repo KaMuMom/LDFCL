@@ -51,23 +51,32 @@ jobs:
 
       - name: Stage and verify Windows package
         run: |
-          $PSNativeCommandUseErrorActionPreference = $true
-          cmake --install out --config Release --prefix package
-          Copy-Item out/Release/ldfcl-cli.exe package/bin/
-          Copy-Item README.md,LICENSE package/
-          Copy-Item out/_deps/nlohmann_json-src/LICENSE.MIT package/share/licenses/LDFCL/nlohmann-json-LICENSE
-          Copy-Item out/_deps/miniz-src/LICENSE package/share/licenses/LDFCL/miniz-LICENSE
-          Copy-Item docs/Qt-LGPL.md package/share/licenses/LDFCL/
-          Copy-Item docs/licenses/*.txt package/share/licenses/LDFCL/
-          foreach ($file in 'LDFCL.exe', 'Qt6Core.dll', 'qwindows.dll') {
-            if (-not (Get-ChildItem package -Recurse -File -Filter $file)) {
-              throw "Missing deployment file: $file"
+          try {
+            $PSNativeCommandUseErrorActionPreference = $false
+            $output = & cmake --install out --config Release --prefix package 2>&1
+            $code = $LASTEXITCODE
+            $output | ForEach-Object { Write-Host $_ }
+            if ($code -ne 0) { throw (($output | Select-Object -Last 22) -join '%0A') }
+            Copy-Item out/Release/ldfcl-cli.exe package/bin/
+            Copy-Item README.md,LICENSE package/
+            Copy-Item out/_deps/nlohmann_json-src/LICENSE.MIT package/share/licenses/LDFCL/nlohmann-json-LICENSE
+            Copy-Item out/_deps/miniz-src/LICENSE package/share/licenses/LDFCL/miniz-LICENSE
+            Copy-Item docs/Qt-LGPL.md package/share/licenses/LDFCL/
+            Copy-Item docs/licenses/*.txt package/share/licenses/LDFCL/
+            foreach ($file in 'LDFCL.exe', 'Qt6Core.dll', 'qwindows.dll') {
+              if (-not (Get-ChildItem package -Recurse -File -Filter $file)) {
+                throw "Missing deployment file: $file"
+              }
             }
+            $archive = "LDFCL-${env:RELEASE_TAG}-Windows-x64.zip"
+            Compress-Archive -Path package/* -DestinationPath $archive
+            $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+            Set-Content -Encoding ascii "${archive}.sha256" "$hash  $archive"
+          } catch {
+            $detail = $_.Exception.Message -replace '\r?\n', '%0A'
+            Write-Host "::error title=Stage Windows package::$detail"
+            exit 1
           }
-          $archive = "LDFCL-${env:RELEASE_TAG}-Windows-x64.zip"
-          Compress-Archive -Path package/* -DestinationPath $archive
-          $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
-          Set-Content -Encoding ascii "${archive}.sha256" "$hash  $archive"
 
       - name: Publish GitHub prerelease
         env:
