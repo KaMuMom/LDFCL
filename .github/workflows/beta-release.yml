@@ -91,7 +91,8 @@ jobs:
               choco install innosetup --no-progress -y
               if ($LASTEXITCODE -ne 0) { throw 'Could not install Inno Setup' }
             }
-            $output = & $iscc "/DReleaseTag=$env:RELEASE_TAG" "/DSourceRoot=$packageRoot" "/DOutputRoot=$($PWD.Path)" packaging/LDFCL.iss 2>&1
+            $entryRoot = Join-Path $PWD.Path 'out/Release'
+            $output = & $iscc "/DReleaseTag=$env:RELEASE_TAG" "/DSourceRoot=$packageRoot" "/DEntryRoot=$entryRoot" "/DOutputRoot=$($PWD.Path)" packaging/LDFCL.iss 2>&1
             $code = $LASTEXITCODE
             $output | ForEach-Object { Write-Host $_ }
             if ($code -ne 0) { throw (($output | Select-Object -Last 24) -join '%0A') }
@@ -114,17 +115,21 @@ jobs:
             $install = Start-Process (Join-Path $PWD.Path $setup) -ArgumentList ($setupArgs + ('/GAMEFOLDER="{0}"' -f $previous)) -Wait -PassThru
             if ($install.ExitCode -ne 0) { throw "Reuse installation exited with code $($install.ExitCode)" }
             if ((Get-ItemProperty $registry).gameDirectory -ne $gameRoot) { throw 'Installer did not store the selected .minecraft directory' }
-            $versions = & (Join-Path $appRoot 'bin/ldfcl-cli.exe') list --game-dir $gameRoot
+            $rootFiles = (Get-ChildItem $appRoot -File | Sort-Object Name).Name -join ','
+            if ($rootFiles -ne 'LDFCL.exe,Uninstall.exe') { throw "Unexpected files in install root: $rootFiles" }
+            $versions = & (Join-Path $appRoot 'runtime/bin/ldfcl-cli.exe') list --game-dir $gameRoot
             if ($LASTEXITCODE -ne 0 -or $versions -ne 'fixture') { throw 'Installed launcher did not discover the reused version' }
             $env:QT_QPA_PLATFORM = 'windows'
             $env:QT_QUICK_BACKEND = 'software'
-            $app = Start-Process (Join-Path $appRoot 'bin/LDFCL.exe') -PassThru
+            $entry = Start-Process (Join-Path $appRoot 'LDFCL.exe') -PassThru
+            if (-not $entry.WaitForExit(5000) -or $entry.ExitCode -ne 0) { throw 'Installed launcher entry failed to start the GUI' }
             Start-Sleep -Seconds 3
-            if ($app.HasExited) { throw "Installed GUI exited early with code $($app.ExitCode)" }
+            $runtimeGui = Join-Path $appRoot 'runtime\bin\LDFCL.exe'
+            $app = Get-Process -Name LDFCL | Where-Object { $_.Path -eq $runtimeGui } | Select-Object -First 1
+            if (-not $app) { throw 'Installed GUI process did not start' }
             Stop-Process -Id $app.Id
-            $uninstall = Get-ChildItem $appRoot -Filter 'unins*.exe' | Select-Object -First 1
-            $result = Start-Process $uninstall.FullName -ArgumentList '/VERYSILENT', '/NORESTART' -Wait -PassThru
-            if ($result.ExitCode -ne 0 -or -not (Test-Path (Join-Path $fixtureVersion 'fixture.jar'))) {
+            $result = Start-Process (Join-Path $appRoot 'Uninstall.exe') -ArgumentList '/VERYSILENT', '/NORESTART' -Wait -PassThru
+            if ($result.ExitCode -ne 0 -or (Test-Path (Join-Path $appRoot 'LDFCL.exe')) -or -not (Test-Path (Join-Path $fixtureVersion 'fixture.jar'))) {
               throw 'Uninstall failed or modified the imported game folder'
             }
             $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()

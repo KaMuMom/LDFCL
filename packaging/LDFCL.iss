@@ -10,7 +10,8 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-UninstallDisplayIcon={app}\bin\LDFCL.exe
+UninstallDisplayIcon={app}\LDFCL.exe
+UninstallFilesDir={app}\runtime\uninstall
 LicenseFile={#SourceRoot}\LICENSE
 OutputDir={#OutputRoot}
 OutputBaseFilename=LDFCL-{#ReleaseTag}-Windows-x64-Setup
@@ -19,13 +20,15 @@ SolidCompression=yes
 WizardStyle=modern
 
 [Files]
-Source: "{#SourceRoot}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
+Source: "{#SourceRoot}\*"; DestDir: "{app}\runtime"; Flags: ignoreversion recursesubdirs
+Source: "{#EntryRoot}\LDFCL.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#EntryRoot}\Uninstall.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\LDFCL"; Filename: "{app}\bin\LDFCL.exe"
+Name: "{autoprograms}\LDFCL"; Filename: "{app}\LDFCL.exe"
 
 [Run]
-Filename: "{app}\bin\LDFCL.exe"; Description: "{cm:LaunchProgram,LDFCL}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\LDFCL.exe"; Description: "{cm:LaunchProgram,LDFCL}"; Flags: nowait postinstall skipifsilent
 
 
 [Code]
