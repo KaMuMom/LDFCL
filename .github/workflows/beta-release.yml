@@ -1,12 +1,20 @@
 name: Publish beta release
 
 on:
+  workflow_dispatch:
   push:
+    branches: [main]
+    paths: ['.github/workflows/beta-release.yml']
     tags:
       - 'beta[0-9]*'
 
 permissions:
   contents: write
+
+env:
+  RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.0' }}
+
+concurrency: release-${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.0' }}
 
 jobs:
   windows-x64:
@@ -17,6 +25,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+          ref: refs/tags/${{ env.RELEASE_TAG }}
       - uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
         with:
           version: '6.8.3'
@@ -44,7 +53,7 @@ jobs:
               throw "Missing deployment file: $file"
             }
           }
-          $archive = "LDFCL-${env:GITHUB_REF_NAME}-Windows-x64.zip"
+          $archive = "LDFCL-${env:RELEASE_TAG}-Windows-x64.zip"
           Compress-Archive -Path package/* -DestinationPath $archive
           $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
           Set-Content -Encoding ascii "${archive}.sha256" "$hash  $archive"
@@ -53,5 +62,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $archive = "LDFCL-${env:GITHUB_REF_NAME}-Windows-x64.zip"
-          gh release create $env:GITHUB_REF_NAME $archive "${archive}.sha256" --verify-tag --prerelease --title "LDFCL ${env:GITHUB_REF_NAME}" --notes "Windows x64 预发行版。解压后打开 bin/LDFCL.exe，选择本地已安装的 Minecraft 版本和兼容的 Java。"
+          gh release view $env:RELEASE_TAG --json tagName 2>$null
+          if ($LASTEXITCODE -eq 0) { exit 0 }
+          $archive = "LDFCL-${env:RELEASE_TAG}-Windows-x64.zip"
+          gh release create $env:RELEASE_TAG $archive "${archive}.sha256" --verify-tag --prerelease --title "LDFCL ${env:RELEASE_TAG}" --notes "Windows x64 预发行版。解压后打开 bin/LDFCL.exe，选择本地已安装的 Minecraft 版本和兼容的 Java。"
