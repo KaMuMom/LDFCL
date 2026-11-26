@@ -351,10 +351,10 @@ int launch(const fs::path& game_directory, const std::string& id, const fs::path
            const fs::path& log) {
   if (!valid_segment(id)) throw Error("Invalid version ID");
   if (java.empty()) throw Error("Choose an installed Java executable");
-  const auto executable = fs::absolute(java);
+  const auto executable = fs::absolute(java).make_preferred();
   if (!fs::is_regular_file(executable))
     throw Error("Java executable not found: " + executable.u8string());
-  const auto root = fs::absolute(game_directory);
+  const auto root = fs::absolute(game_directory).make_preferred();
   const auto directory = root / "versions" / fs::u8path(id);
   const auto version = read_json(directory / fs::u8path(id + ".json"));
   if (version.contains("inheritsFrom"))

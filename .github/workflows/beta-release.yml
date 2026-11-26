@@ -14,7 +14,9 @@ permissions:
 env:
   RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.0' }}
 
-concurrency: release-${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.0' }}
+concurrency:
+  group: release-${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.0' }}
+  cancel-in-progress: true
 
 jobs:
   windows-x64:

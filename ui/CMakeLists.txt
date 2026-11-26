@@ -7,7 +7,7 @@ endif()
 
 set(evolve_qml)
 foreach(component ETheme ECard EButton EDropdown)
-  set(file "${PROJECT_SOURCE_DIR}/third_party/evolveui/${component}.qml")
+  set(file "evolveui/${component}.qml")
   set_source_files_properties("${file}" PROPERTIES QT_RESOURCE_ALIAS "${component}.qml")
   list(APPEND evolve_qml "${file}")
 endforeach()
@@ -17,7 +17,7 @@ qt_add_qml_module(ldfcl_gui
 )
 
 install(TARGETS ldfcl_gui BUNDLE DESTINATION . RUNTIME DESTINATION bin)
-install(FILES "${PROJECT_SOURCE_DIR}/third_party/evolveui/LICENSE"
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/evolveui/LICENSE"
         DESTINATION share/licenses/LDFCL RENAME EvolveUI-LICENSE)
 if(WIN32 OR APPLE)
   qt_generate_deploy_qml_app_script(
