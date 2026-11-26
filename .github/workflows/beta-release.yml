@@ -12,15 +12,15 @@ permissions:
   contents: write
 
 env:
-  RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.2' }}
+  RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.1' }}
+  SETUP_SUFFIX: ${{ (github.ref_type != 'tag' || github.ref_name == 'beta1.0.1') && 'Clean-Setup' || 'Setup' }}
 
 concurrency:
-  group: release-${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.2' }}
+  group: release-${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.1' }}
   cancel-in-progress: true
 
 jobs:
   windows-x64:
-    if: ${{ false }}
     name: Build and publish Windows x64
     runs-on: windows-2022
     timeout-minutes: 30
@@ -29,6 +29,12 @@ jobs:
         with:
           persist-credentials: false
           ref: refs/tags/${{ env.RELEASE_TAG }}
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+          path: release-tools
+          sparse-checkout: packaging
       - uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
         with:
           version: '6.8.3'
@@ -92,13 +98,18 @@ jobs:
               choco install innosetup --no-progress -y
               if ($LASTEXITCODE -ne 0) { throw 'Could not install Inno Setup' }
             }
-            $entryRoot = Join-Path $PWD.Path 'out/Release'
-            $output = & $iscc "/DReleaseTag=$env:RELEASE_TAG" "/DSourceRoot=$packageRoot" "/DEntryRoot=$entryRoot" "/DOutputRoot=$($PWD.Path)" packaging/LDFCL.iss 2>&1
+            $PSNativeCommandUseErrorActionPreference = $true
+            cmake -S release-tools/packaging -B entries -G "Visual Studio 17 2022" -A x64
+            cmake --build entries --config Release --parallel 2
+            $PSNativeCommandUseErrorActionPreference = $false
+            $entryRoot = Join-Path $PWD.Path 'entries/Release'
+            $setupBase = "LDFCL-${env:RELEASE_TAG}-Windows-x64-${env:SETUP_SUFFIX}"
+            $output = & $iscc "/DReleaseTag=$env:RELEASE_TAG" "/DSourceRoot=$packageRoot" "/DEntryRoot=$entryRoot" "/DSetupBasename=$setupBase" "/DOutputRoot=$($PWD.Path)" release-tools/packaging/LDFCL.iss 2>&1
             $code = $LASTEXITCODE
             $output | ForEach-Object { Write-Host $_ }
             if ($code -ne 0) { throw (($output | Select-Object -Last 24) -join '%0A') }
 
-            $setup = "LDFCL-${env:RELEASE_TAG}-Windows-x64-Setup.exe"
+            $setup = "LDFCL-${env:RELEASE_TAG}-Windows-x64-${env:SETUP_SUFFIX}.exe"
             $appRoot = Join-Path $env:RUNNER_TEMP 'LDFCL Install Test'
             $previous = Join-Path $env:RUNNER_TEMP 'PCL Fixture'
             $gameRoot = Join-Path $previous '.minecraft'
@@ -145,7 +156,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $setup = "LDFCL-${env:RELEASE_TAG}-Windows-x64-Setup.exe"
-          gh release view $env:RELEASE_TAG --json tagName 2>$null
-          if ($LASTEXITCODE -eq 0) { exit 0 }
+          $setup = "LDFCL-${env:RELEASE_TAG}-Windows-x64-${env:SETUP_SUFFIX}.exe"
+          $release = gh release view $env:RELEASE_TAG --json body,assets 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            $published = $release | ConvertFrom-Json
+            $known = @($published.assets | ForEach-Object { $_.name })
+            $missing = @($setup, "${setup}.sha256") | Where-Object { $_ -notin $known }
+            if ($missing) {
+              gh release upload $env:RELEASE_TAG @missing
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+            if ($published.body -notlike "*$setup*") {
+              $notes = "$($published.body)`n`n建议下载 $setup。安装目录顶层放置 LDFCL.exe 和 Uninstall.exe，运行文件收在 runtime。"
+              Set-Content -Encoding utf8 release-notes.txt $notes
+              gh release edit $env:RELEASE_TAG --notes-file release-notes.txt
+            }
+            exit $LASTEXITCODE
+          }
           gh release create $env:RELEASE_TAG $setup "${setup}.sha256" --verify-tag --prerelease --title "LDFCL ${env:RELEASE_TAG}" --notes "Windows x64 安装程序。可全新安装，或选择 PCL／HMCL 的游戏目录，直接使用已有版本与存档。"
