@@ -136,7 +136,7 @@ jobs:
             $chineseLog = Join-Path $env:RUNNER_TEMP 'ldfcl-zhcn-install.log'
             $install = Start-Process (Join-Path $PWD.Path $setup) -ArgumentList ($setupArgs + '/LANG=zhcn' + ('/LOG="{0}"' -f $chineseLog)) -Wait -PassThru
             if ($install.ExitCode -ne 0) { throw ((Get-Content $chineseLog -Tail 12) -join '%0A') }
-            if (-not (Select-String $chineseLog -SimpleMatch 'LDFCL installer language: zhcn')) { throw 'Simplified Chinese was not selected' }
+            if (-not (Select-String -Path $chineseLog -Pattern 'LDFCL installer language: zhcn' -SimpleMatch -Quiet)) { throw 'Simplified Chinese was not selected' }
             if ((Get-ItemProperty $registry).gameDirectory -ne $gameRoot) { throw 'Upgrade did not keep the selected .minecraft directory' }
             $rootItems = (Get-ChildItem $appRoot -Force | Sort-Object Name).Name -join ','
             if ($rootItems -ne 'LDFCL.exe,runtime,Uninstall.exe') { throw "Unexpected contents in install root after upgrade: $rootItems" }
@@ -162,7 +162,7 @@ jobs:
             $englishLog = Join-Path $env:RUNNER_TEMP 'ldfcl-en-install.log'
             $install = Start-Process (Join-Path $PWD.Path $setup) -ArgumentList ($setupArgs + '/LANG=en' + ('/LOG="{0}"' -f $englishLog)) -Wait -PassThru
             if ($install.ExitCode -ne 0) { throw ((Get-Content $englishLog -Tail 12) -join '%0A') }
-            if (-not (Select-String $englishLog -SimpleMatch 'LDFCL installer language: en')) { throw 'English was not selected' }
+            if (-not (Select-String -Path $englishLog -Pattern 'LDFCL installer language: en' -SimpleMatch -Quiet)) { throw 'English was not selected' }
             $fresh = (Get-ItemProperty $registry).gameDirectory
             if ($fresh -ne (Join-Path $env:LOCALAPPDATA 'LDFCL/game').Replace('/', '\')) { throw "Wrong fresh game directory: $fresh" }
             $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
