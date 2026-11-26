@@ -10,7 +10,7 @@ cmake --build out --config Release
 ctest --test-dir out -C Release --output-on-failure
 ```
 
-单配置生成器的 Linux 图形程序位于 `out/ui/LDFCL`。Windows 使用 `cmake --install out --config Release --prefix package` 部署后，运行 `package/bin/LDFCL.exe`。安装脚本会部署所需的 Qt 库、平台插件和 QML 模块。
+单配置生成器的 Linux 图形程序位于 `out/ui/LDFCL`。Windows 使用 `cmake --install out --config Release --prefix "$PWD/package"` 部署后，运行 `package/bin/LDFCL.exe`。安装脚本会部署所需的 Qt 库、平台插件和 QML 模块。
 
 首次启动时，从「游戏目录」选择已安装 Minecraft 的目录。然后选择版本和兼容的 `java`、`java.exe` 或 `javaw.exe`，点击「启动游戏」。默认目录随系统选择，Java 会尝试从 `JAVA_HOME` 或 `PATH` 查找。Java 的输出保存在游戏目录中的 `ldfcl-launch.log`。
 
