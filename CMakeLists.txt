@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(LDFCL VERSION 1.0.1 LANGUAGES C CXX)
+project(LDFCL VERSION 1.0.2 LANGUAGES C CXX)
 
 include(FetchContent)
 set(JSON_BuildTests OFF CACHE BOOL "" FORCE)

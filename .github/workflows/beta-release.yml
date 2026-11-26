@@ -2,9 +2,12 @@ name: Publish beta release
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing beta tag to package
+        required: true
+        type: string
   push:
-    branches: [main]
-    paths: ['.github/workflows/beta-release.yml', 'packaging/**']
     tags:
       - 'beta[0-9]*'
 
@@ -12,11 +15,11 @@ permissions:
   contents: write
 
 env:
-  RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.1' }}
-  SETUP_SUFFIX: ${{ (github.ref_type != 'tag' || github.ref_name == 'beta1.0.1') && 'Bilingual-Setup' || 'Setup' }}
+  RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+  SETUP_SUFFIX: ${{ (inputs.release_tag || github.ref_name) == 'beta1.0.1' && 'Bilingual-Setup' || 'Setup' }}
 
 concurrency:
-  group: release-${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.1' }}
+  group: release-${{ inputs.release_tag || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -197,4 +200,4 @@ jobs:
             }
             exit $LASTEXITCODE
           }
-          gh release create $env:RELEASE_TAG $setup "${setup}.sha256" --verify-tag --prerelease --title "LDFCL ${env:RELEASE_TAG}" --notes "Windows x64 安装程序。可全新安装，或选择 PCL／HMCL 的游戏目录，直接使用已有版本与存档。"
+          gh release create $env:RELEASE_TAG $setup "${setup}.sha256" --verify-tag --prerelease --title "LDFCL ${env:RELEASE_TAG}" --notes "Windows x64 安装程序支持简体中文和英文。可全新安装，也可沿用 PCL／HMCL 的游戏目录、版本和存档。安装后从根目录运行 LDFCL.exe。"
