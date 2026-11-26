@@ -13,7 +13,7 @@ permissions:
 
 env:
   RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.1' }}
-  SETUP_SUFFIX: ${{ (github.ref_type != 'tag' || github.ref_name == 'beta1.0.1') && 'Clean-Setup' || 'Setup' }}
+  SETUP_SUFFIX: ${{ (github.ref_type != 'tag' || github.ref_name == 'beta1.0.1') && 'Bilingual-Setup' || 'Setup' }}
 
 concurrency:
   group: release-${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.1' }}
@@ -93,18 +93,25 @@ jobs:
               Where-Object { Test-Path $_ } | Sort-Object -Descending | Select-Object -First 1
             if (-not $redist) { throw 'Visual C++ runtime redistributables are missing' }
             Copy-Item "$redist/*.dll" package/bin/
-            $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
-            if (-not (Test-Path $iscc)) {
-              choco install innosetup --no-progress -y
-              if ($LASTEXITCODE -ne 0) { throw 'Could not install Inno Setup' }
+            $compilerInstaller = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.4.exe'
+            $compilerDirectory = Join-Path $env:RUNNER_TEMP 'Inno Setup 6.7.4'
+            $chineseMessages = Join-Path $env:RUNNER_TEMP 'ChineseSimplified.isl'
+            Invoke-WebRequest 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_4/innosetup-6.7.4.exe' -OutFile $compilerInstaller
+            Invoke-WebRequest 'https://raw.githubusercontent.com/jrsoftware/issrc/c2913c993858a781fcb455bac8b8949c1c366cb8/Files/Languages/Unofficial/ChineseSimplified.isl' -OutFile $chineseMessages
+            if ((Get-FileHash $compilerInstaller).Hash -ne 'a549929319f9120716677c685535ca4671e4b937b5fdc87e2585f32d8eb30e8c' -or
+                (Get-FileHash $chineseMessages).Hash -ne '7d544b9bb1d142cfa11f2e5d3cc8abe2e55f8e066c5124e3772675aa236e1278') {
+              throw 'Inno Setup or its Simplified Chinese messages failed checksum verification'
             }
+            $compiler = Start-Process $compilerInstaller -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="{0}"' -f $compilerDirectory) -Wait -PassThru
+            if ($compiler.ExitCode -ne 0) { throw "Inno Setup installation exited with code $($compiler.ExitCode)" }
+            $iscc = Join-Path $compilerDirectory 'ISCC.exe'
             $PSNativeCommandUseErrorActionPreference = $true
             cmake -S release-tools/packaging -B entries -G "Visual Studio 17 2022" -A x64
             cmake --build entries --config Release --parallel 2
             $PSNativeCommandUseErrorActionPreference = $false
             $entryRoot = Join-Path $PWD.Path 'entries/Release'
             $setupBase = "LDFCL-${env:RELEASE_TAG}-Windows-x64-${env:SETUP_SUFFIX}"
-            $output = & $iscc "/DReleaseTag=$env:RELEASE_TAG" "/DSourceRoot=$packageRoot" "/DEntryRoot=$entryRoot" "/DSetupBasename=$setupBase" "/DOutputRoot=$($PWD.Path)" release-tools/packaging/LDFCL.iss 2>&1
+            $output = & $iscc "/DReleaseTag=$env:RELEASE_TAG" "/DSourceRoot=$packageRoot" "/DEntryRoot=$entryRoot" "/DSetupBasename=$setupBase" "/DOutputRoot=$($PWD.Path)" "/DChineseMessages=$chineseMessages" release-tools/packaging/LDFCL.iss 2>&1
             $code = $LASTEXITCODE
             $output | ForEach-Object { Write-Host $_ }
             if ($code -ne 0) { throw (($output | Select-Object -Last 24) -join '%0A') }
@@ -120,15 +127,20 @@ jobs:
             Set-Content (Join-Path $fixtureVersion 'fixture.json') -Encoding ascii '{"mainClass":"fixture.Main","libraries":[]}'
             Set-Content (Join-Path $fixtureVersion 'fixture.jar') -Encoding ascii 'Fixture client'
             $setupArgs = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="{0}"' -f $appRoot))
-            $install = Start-Process (Join-Path $PWD.Path $setup) -ArgumentList $setupArgs -Wait -PassThru
-            if ($install.ExitCode -ne 0) { throw "Fresh install exited with code $($install.ExitCode)" }
-            $fresh = (Get-ItemProperty $registry).gameDirectory
-            if ($fresh -ne (Join-Path $env:LOCALAPPDATA 'LDFCL/game').Replace('/', '\')) { throw "Wrong fresh game directory: $fresh" }
-            $install = Start-Process (Join-Path $PWD.Path $setup) -ArgumentList ($setupArgs + ('/GAMEFOLDER="{0}"' -f $previous)) -Wait -PassThru
-            if ($install.ExitCode -ne 0) { throw "Reuse installation exited with code $($install.ExitCode)" }
-            if ((Get-ItemProperty $registry).gameDirectory -ne $gameRoot) { throw 'Installer did not store the selected .minecraft directory' }
-            $rootFiles = (Get-ChildItem $appRoot -File | Sort-Object Name).Name -join ','
-            if ($rootFiles -ne 'LDFCL.exe,Uninstall.exe') { throw "Unexpected files in install root: $rootFiles" }
+            $legacySetup = Join-Path $env:RUNNER_TEMP 'LDFCL-beta1.0.1-Windows-x64-Setup.exe'
+            Invoke-WebRequest 'https://github.com/KaMuMom/LDFCL/releases/download/beta1.0.1/LDFCL-beta1.0.1-Windows-x64-Setup.exe' -OutFile $legacySetup
+            if ((Get-FileHash $legacySetup).Hash -ne '7fe14df6373bf93c6eb3d73b738f76906e8d6802e25f26cb4465617f26ad125f') { throw 'Legacy installer failed checksum verification' }
+            $install = Start-Process $legacySetup -ArgumentList ($setupArgs + ('/GAMEFOLDER="{0}"' -f $previous)) -Wait -PassThru
+            if ($install.ExitCode -ne 0 -or -not (Test-Path (Join-Path $appRoot 'bin/LDFCL.exe'))) { throw 'Could not reproduce the legacy bin layout' }
+
+            $chineseLog = Join-Path $env:RUNNER_TEMP 'ldfcl-zhcn-install.log'
+            $install = Start-Process (Join-Path $PWD.Path $setup) -ArgumentList ($setupArgs + '/LANG=zhcn' + ('/LOG="{0}"' -f $chineseLog)) -Wait -PassThru
+            if ($install.ExitCode -ne 0) { throw ((Get-Content $chineseLog -Tail 12) -join '%0A') }
+            if (-not (Select-String $chineseLog -SimpleMatch 'LDFCL installer language: zhcn')) { throw 'Simplified Chinese was not selected' }
+            if ((Get-ItemProperty $registry).gameDirectory -ne $gameRoot) { throw 'Upgrade did not keep the selected .minecraft directory' }
+            $rootItems = (Get-ChildItem $appRoot -Force | Sort-Object Name).Name -join ','
+            if ($rootItems -ne 'LDFCL.exe,runtime,Uninstall.exe') { throw "Unexpected contents in install root after upgrade: $rootItems" }
+            if ((Get-Content (Join-Path $appRoot 'runtime/LICENSE.zh-CN.txt') -Raw) -notmatch 'MIT 许可证') { throw 'The Chinese license notice was not installed correctly' }
             $versions = & (Join-Path $appRoot 'runtime/bin/ldfcl-cli.exe') list --game-dir $gameRoot
             if ($LASTEXITCODE -ne 0 -or $versions -ne 'fixture') { throw 'Installed launcher did not discover the reused version' }
             $env:QT_QPA_PLATFORM = 'windows'
@@ -140,10 +152,19 @@ jobs:
             $app = Get-Process -Name LDFCL | Where-Object { $_.Path -eq $runtimeGui } | Select-Object -First 1
             if (-not $app) { throw 'Installed GUI process did not start' }
             Stop-Process -Id $app.Id
+            if (-not $app.WaitForExit(5000)) { throw 'The installed GUI did not exit' }
             $result = Start-Process (Join-Path $appRoot 'Uninstall.exe') -ArgumentList '/VERYSILENT', '/NORESTART' -Wait -PassThru
             if ($result.ExitCode -ne 0 -or (Test-Path (Join-Path $appRoot 'LDFCL.exe')) -or -not (Test-Path (Join-Path $fixtureVersion 'fixture.jar'))) {
               throw 'Uninstall failed or modified the imported game folder'
             }
+
+            Remove-ItemProperty -Path $registry -Name gameDirectory
+            $englishLog = Join-Path $env:RUNNER_TEMP 'ldfcl-en-install.log'
+            $install = Start-Process (Join-Path $PWD.Path $setup) -ArgumentList ($setupArgs + '/LANG=en' + ('/LOG="{0}"' -f $englishLog)) -Wait -PassThru
+            if ($install.ExitCode -ne 0) { throw ((Get-Content $englishLog -Tail 12) -join '%0A') }
+            if (-not (Select-String $englishLog -SimpleMatch 'LDFCL installer language: en')) { throw 'English was not selected' }
+            $fresh = (Get-ItemProperty $registry).gameDirectory
+            if ($fresh -ne (Join-Path $env:LOCALAPPDATA 'LDFCL/game').Replace('/', '\')) { throw "Wrong fresh game directory: $fresh" }
             $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
             Set-Content -Encoding ascii "${setup}.sha256" "$hash  $setup"
           } catch {
@@ -167,7 +188,10 @@ jobs:
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             }
             if ($published.body -notlike "*$setup*") {
-              $notes = "$($published.body)`n`n建议下载 $setup。安装目录顶层放置 LDFCL.exe 和 Uninstall.exe，运行文件收在 runtime。"
+              $download = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:RELEASE_TAG/$setup"
+              $oldRecommendation = '建议下载 LDFCL-beta1.0.1-Windows-x64-Clean-Setup.exe。安装目录顶层放置 LDFCL.exe 和 Uninstall.exe，运行文件收在 runtime。'
+              $previousNotes = $published.body.Replace($oldRecommendation, '').Trim()
+              $notes = "推荐下载 [双语安装程序]($download)。安装向导支持简体中文和英文。安装后从根目录运行 LDFCL.exe。`n`n$previousNotes"
               Set-Content -Encoding utf8 release-notes.txt $notes
               gh release edit $env:RELEASE_TAG --notes-file release-notes.txt
             }

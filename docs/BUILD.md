@@ -12,7 +12,16 @@ ctest --test-dir out -C Release --output-on-failure
 
 单配置生成器的 Linux 图形程序位于 `out/ui/LDFCL`。Windows 使用 `cmake --install out --config Release --prefix "$PWD/package"` 部署后，运行 `package/bin/LDFCL.exe`。安装脚本会部署所需的 Qt 库、平台插件和 QML 模块。
 
-Windows 安装程序可以创建空游戏目录，或直接使用已有的 PCL／HMCL 游戏目录。选择包含 `versions` 的 `.minecraft`，也可选择它所在的启动器文件夹。安装目录顶层有 `LDFCL.exe` 和 `Uninstall.exe`，运行文件在 `runtime` 目录下。安装和卸载都保留已有游戏文件。游戏目录、Java 路径和隔离方式位于「设置」。首页提供版本下拉框和启动按钮。Java 会尝试从 `JAVA_HOME` 或 `PATH` 查找，输出保存在游戏目录中的 `ldfcl-launch.log`。
+Windows 安装向导提供简体中文和英文，安装说明与 MIT 许可页跟随所选语言。向导可以创建空游戏目录，也可以沿用 PCL／HMCL 的游戏目录。选择包含 `versions` 的 `.minecraft`，或选择它所在的启动器文件夹。
+
+```text
+LDFCL/
+├── LDFCL.exe       启动程序
+├── Uninstall.exe   卸载程序
+└── runtime/        Qt 库、插件、许可和运行文件
+```
+
+安装后直接运行根目录的 `LDFCL.exe`。升级和卸载会保留已选中的游戏目录及其内容。游戏目录、Java 路径和隔离方式位于「设置」。首页提供版本下拉框和启动按钮。Java 会尝试从 `JAVA_HOME` 或 `PATH` 查找，输出保存在游戏目录中的 `ldfcl-launch.log`。
 
 ## 命令行版
 
