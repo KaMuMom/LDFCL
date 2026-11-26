@@ -39,7 +39,7 @@ jobs:
             $output | ForEach-Object { Write-Host $_ }
             if ($code -ne 0) {
               $detail = ($output | Select-Object -Last 24) -join '%0A'
-              Write-Host "::error title=$label::$detail"
+              Write-Host "::error title=${label}::$detail"
               exit $code
             }
           }
