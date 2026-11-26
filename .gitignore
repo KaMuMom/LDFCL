@@ -1,20 +1,19 @@
-node_modules/
-dist/
-dist-electron/
-release/
-.cache/
-test-results/
+/out/
+/build-*/
+*.user
 *.log
-.env*
-.minecraft/
-LDFCL-data/
-.ldfcl-migration-*/
-.ldfcl-update/
-accounts.json
-launcher.json
-credential.xml
-core/dist/
+/.minecraft/
+/LDFCL-data/
 
-shared/dist/
-cli/dist/
-electron/dist/
+# Local outputs left by former Electron builds
+/node_modules/
+/dist/
+/release/
+/test-results/
+/core/dist/
+/cli/dist/
+/shared/dist/
+/electron/dist/
+
+/out-cli/
+/package/
