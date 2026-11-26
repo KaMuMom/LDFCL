@@ -33,10 +33,19 @@ jobs:
 
       - name: Build and test
         run: |
-          $PSNativeCommandUseErrorActionPreference = $true
-          cmake -S . -B out -G "Visual Studio 17 2022" -A x64 "-DCMAKE_PREFIX_PATH=$env:QT_ROOT_DIR"
-          cmake --build out --config Release --parallel 2
-          ctest --test-dir out -C Release --output-on-failure
+          function Invoke-ReleaseCheck($label, $tool, $arguments) {
+            $output = & $tool @arguments 2>&1
+            $code = $LASTEXITCODE
+            $output | ForEach-Object { Write-Host $_ }
+            if ($code -ne 0) {
+              $detail = ($output | Select-Object -Last 24) -join '%0A'
+              Write-Host "::error title=$label::$detail"
+              exit $code
+            }
+          }
+          Invoke-ReleaseCheck 'Configure Windows' cmake @('-S', '.', '-B', 'out', '-G', 'Visual Studio 17 2022', '-A', 'x64', "-DCMAKE_PREFIX_PATH=$env:QT_ROOT_DIR")
+          Invoke-ReleaseCheck 'Compile Windows' cmake @('--build', 'out', '--config', 'Release', '--parallel', '2')
+          Invoke-ReleaseCheck 'Test Windows' ctest @('--test-dir', 'out', '-C', 'Release', '--output-on-failure')
 
       - name: Stage and verify Windows package
         run: |
