@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['.github/workflows/beta-release.yml']
+    paths: ['.github/workflows/beta-release.yml', 'packaging/**']
     tags:
       - 'beta[0-9]*'
 

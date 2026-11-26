@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.24)
 project(LDFCLWindowsEntries LANGUAGES CXX)
 
-add_executable(ldfcl_entry WIN32 packaging/windows-entry.cpp)
-add_executable(ldfcl_uninstall_entry WIN32 packaging/windows-entry.cpp)
+add_executable(ldfcl_entry WIN32 windows-entry.cpp)
+add_executable(ldfcl_uninstall_entry WIN32 windows-entry.cpp)
 set_target_properties(ldfcl_entry PROPERTIES OUTPUT_NAME LDFCL)
 set_target_properties(ldfcl_uninstall_entry PROPERTIES OUTPUT_NAME Uninstall)
 target_compile_definitions(ldfcl_uninstall_entry PRIVATE LDFCL_UNINSTALL_ENTRY)
