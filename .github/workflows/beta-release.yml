@@ -12,10 +12,10 @@ permissions:
   contents: write
 
 env:
-  RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.1' }}
+  RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.2' }}
 
 concurrency:
-  group: release-${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.1' }}
+  group: release-${{ github.ref_type == 'tag' && github.ref_name || 'beta1.0.2' }}
   cancel-in-progress: true
 
 jobs:
