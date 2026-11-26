@@ -1,0 +1,57 @@
+name: Publish beta release
+
+on:
+  push:
+    tags:
+      - 'beta[0-9]*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows-x64:
+    name: Build and publish Windows x64
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
+        with:
+          version: '6.8.3'
+          arch: win64_msvc2022_64
+
+      - name: Build and test
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          cmake -S . -B out -G "Visual Studio 17 2022" -A x64 "-DCMAKE_PREFIX_PATH=$env:QT_ROOT_DIR"
+          cmake --build out --config Release --parallel 2
+          ctest --test-dir out -C Release --output-on-failure
+
+      - name: Stage and verify Windows package
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          cmake --install out --config Release --prefix package
+          Copy-Item out/Release/ldfcl-cli.exe package/bin/
+          Copy-Item README.md,LICENSE package/
+          Copy-Item out/_deps/nlohmann_json-src/LICENSE.MIT package/share/licenses/LDFCL/nlohmann-json-LICENSE
+          Copy-Item out/_deps/miniz-src/LICENSE package/share/licenses/LDFCL/miniz-LICENSE
+          Copy-Item docs/Qt-LGPL.md package/share/licenses/LDFCL/
+          Copy-Item docs/licenses/*.txt package/share/licenses/LDFCL/
+          foreach ($file in 'LDFCL.exe', 'Qt6Core.dll', 'qwindows.dll') {
+            if (-not (Get-ChildItem package -Recurse -File -Filter $file)) {
+              throw "Missing deployment file: $file"
+            }
+          }
+          $archive = "LDFCL-${env:GITHUB_REF_NAME}-Windows-x64.zip"
+          Compress-Archive -Path package/* -DestinationPath $archive
+          $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          Set-Content -Encoding ascii "${archive}.sha256" "$hash  $archive"
+
+      - name: Publish GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $archive = "LDFCL-${env:GITHUB_REF_NAME}-Windows-x64.zip"
+          gh release create $env:GITHUB_REF_NAME $archive "${archive}.sha256" --verify-tag --prerelease --title "LDFCL ${env:GITHUB_REF_NAME}" --notes "Windows x64 预发行版。解压后打开 bin/LDFCL.exe，选择本地已安装的 Minecraft 版本和兼容的 Java。"
