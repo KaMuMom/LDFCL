@@ -1,0 +1,67 @@
+[package]
+name = "ldfcl"
+version = "1.1.0"
+edition = "2024"
+rust-version = "1.100"
+license = "MIT"
+repository = "https://github.com/KaMuMom/LDFCL"
+default-run = "LDFCL"
+
+[lib]
+path = "rust/lib.rs"
+
+[[bin]]
+name = "LDFCL"
+path = "rust/main.rs"
+required-features = ["gui"]
+
+[[bin]]
+name = "ldfcl-cli"
+path = "rust/cli.rs"
+
+[[bin]]
+name = "ldfcl-uninstall"
+path = "rust/uninstall.rs"
+
+[[test]]
+name = "offline"
+path = "tests/offline.rs"
+harness = false
+
+[features]
+default = ["gui"]
+gui = [
+    "dep:async-channel",
+    "dep:gpui",
+    "dep:gpui-component",
+    "dep:gpui-component-assets",
+    "dep:rust-embed",
+]
+
+[dependencies]
+anyhow = "1"
+async-channel = { version = "2", optional = true }
+gpui = { version = "=0.2.2", optional = true }
+gpui-component = { version = "=0.5.1", default-features = false, optional = true }
+gpui-component-assets = { version = "=0.5.1", optional = true }
+regress = "0.10"
+rust-embed = { version = "8", optional = true, features = ["debug-embed"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+zip = { version = "4.6", default-features = false, features = ["deflate"] }
+
+[target.'cfg(unix)'.dependencies]
+# GPUI 0.2.2 depends on xattr 0.2, which still uses libc::ENOATTR on Linux.
+libc = "=0.2.189"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Registry",
+    "Win32_System_SystemInformation",
+    "Win32_System_WindowsProgramming",
+    "Win32_UI_WindowsAndMessaging",
+] }

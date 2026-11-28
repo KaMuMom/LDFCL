@@ -53,10 +53,15 @@ en.SaveGameDirectoryFailed=Could not save the LDFCL game directory.
 en.RemoveLegacyInstallFailed=Could not remove the older launcher files. Close LDFCL, uninstall the older version in Windows Settings, and try again.
 
 [Files]
-Source: "{#SourceRoot}\*"; DestDir: "{app}\runtime"; Flags: ignoreversion recursesubdirs
+Source: "{#SourceRoot}\runtime\*"; DestDir: "{app}\runtime"; Flags: ignoreversion recursesubdirs
+Source: "{#SourceRoot}\LICENSE"; DestDir: "{app}\runtime"; Flags: ignoreversion
 Source: "LICENSE.zh-CN.txt"; DestDir: "{app}\runtime"; Flags: ignoreversion
-Source: "{#EntryRoot}\LDFCL.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#EntryRoot}\Uninstall.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceRoot}\LDFCL.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceRoot}\ldfcl-uninstall.exe"; DestDir: "{app}"; DestName: "Uninstall.exe"; Flags: ignoreversion
+
+[InstallDelete]
+Type: files; Name: "{app}\runtime\bin\LDFCL.exe"; Check: IsPreviousQtLayout
+Type: files; Name: "{app}\runtime\bin\Qt6*.dll"; Check: IsPreviousQtLayout
 
 [Icons]
 Name: "{autoprograms}\LDFCL"; Filename: "{app}\LDFCL.exe"
@@ -70,26 +75,48 @@ const
   SettingsKey = 'Software\LDFCL\LDFCL';
   GameDirectoryValue = 'gameDirectory';
   LegacyUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{D36A8869-A15C-461A-97B8-5811D65F2D38}_is1';
+  GameDirectoryFile = 'config\game-directory.txt';
+  MoveFileReplaceExisting = 1;
 
 var
   GameMode: TInputOptionWizardPage;
   ExistingGame: TInputDirWizardPage;
-  SelectedGame: String;
+  ConfiguredRoot, PreviousPortableGame, SelectedGame: String;
+  PreviousQtLayout: Boolean;
+
+function MoveFileEx(Source, Destination: String; Flags: Cardinal): Bool;
+external 'MoveFileExW@kernel32.dll stdcall setuponly';
 
 function ExistingGameRoot(Path: String): String;
 begin
   Result := '';
   Path := Trim(Path);
   if Path = '' then Exit;
+  Path := RemoveBackslashUnlessRoot(ExpandFileName(Path));
   if DirExists(AddBackslash(Path) + 'versions') then
     Result := Path
   else if DirExists(AddBackslash(Path) + '.minecraft\versions') then
     Result := AddBackslash(Path) + '.minecraft';
 end;
 
-procedure InitializeWizard;
+function ReadPortableGameDirectory(Root: String): String;
 var
-  PreviousGame, RequestedGame: String;
+  Bytes: AnsiString;
+  Path: String;
+begin
+  Result := '';
+  if not LoadStringFromFile(AddBackslash(Root) + GameDirectoryFile, Bytes) then Exit;
+  Path := UTF8Decode(Bytes);
+  if Copy(Path, 1, 1) = #$FEFF then Delete(Path, 1, 1);
+  Path := Trim(Path);
+  if Path = '' then Exit;
+  StringChangeEx(Path, '/', '\', False);
+  if (Copy(Path, 1, 2) <> '\\') and (Copy(Path, 2, 2) <> ':\') then
+    Path := AddBackslash(Root) + Path;
+  Result := RemoveBackslashUnlessRoot(ExpandFileName(Path));
+end;
+
+procedure InitializeWizard;
 begin
   Log('LDFCL installer language: ' + ActiveLanguage);
   GameMode := CreateInputOptionPage(wpSelectDir, CustomMessage('GameModeTitle'),
@@ -101,18 +128,40 @@ begin
   ExistingGame := CreateInputDirPage(GameMode.ID, CustomMessage('ExistingGameTitle'),
     CustomMessage('ExistingGameDescription'), CustomMessage('ExistingGameInfo'), False, '');
   ExistingGame.Add(CustomMessage('GameDirectoryLabel'));
+end;
 
-  if RegQueryStringValue(HKCU, SettingsKey, GameDirectoryValue, PreviousGame) then
-    if ExistingGameRoot(PreviousGame) <> '' then begin
-      ExistingGame.Values[0] := PreviousGame;
-      GameMode.SelectedValueIndex := 1;
-    end;
+procedure CurPageChanged(CurPageID: Integer);
+var
+  Root, PreviousGame, RequestedGame: String;
+begin
+  if CurPageID <> GameMode.ID then Exit;
+  Root := RemoveBackslashUnlessRoot(ExpandFileName(WizardDirValue));
+  if CompareText(Root, ConfiguredRoot) = 0 then Exit;
+  ConfiguredRoot := Root;
 
   RequestedGame := ExpandConstant('{param:GAMEFOLDER|}');
-  if RequestedGame <> '' then begin
-    ExistingGame.Values[0] := RequestedGame;
-    GameMode.SelectedValueIndex := 1;
+  PreviousPortableGame := ReadPortableGameDirectory(Root);
+  if RequestedGame = '' then begin
+    RequestedGame := PreviousPortableGame;
+    if (RequestedGame = '') and
+       RegQueryStringValue(HKCU, SettingsKey, GameDirectoryValue, PreviousGame) then
+      RequestedGame := ExistingGameRoot(PreviousGame);
   end;
+
+  ExistingGame.Values[0] := RequestedGame;
+  if RequestedGame <> '' then
+    GameMode.SelectedValueIndex := 1
+  else
+    GameMode.SelectedValueIndex := 0;
+end;
+
+function ChosenExistingGame: String;
+begin
+  if (PreviousPortableGame <> '') and
+     (CompareText(ExistingGame.Values[0], PreviousPortableGame) = 0) then
+    Result := PreviousPortableGame
+  else
+    Result := ExistingGameRoot(ExistingGame.Values[0]);
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
@@ -123,7 +172,7 @@ end;
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
-  if (CurPageID = ExistingGame.ID) and (ExistingGameRoot(ExistingGame.Values[0]) = '') then begin
+  if (CurPageID = ExistingGame.ID) and (ChosenExistingGame = '') then begin
     MsgBox(CustomMessage('GameDirectoryMissing'), mbError, MB_OK);
     Result := False;
   end;
@@ -131,25 +180,38 @@ end;
 
 function RemovePreviousLayout: Boolean;
 var
-  RegisteredCommand, OldUninstaller: String;
+  RegisteredCommand, OldUninstaller, OldLauncher: String;
   ExitCode: Integer;
 begin
   Result := True;
-  OldUninstaller := ExpandConstant('{app}\unins000.exe');
-  if not FileExists(ExpandConstant('{app}\bin\LDFCL.exe')) then Exit;
+  if PreviousQtLayout then begin
+    OldLauncher := ExpandConstant('{app}\runtime\bin\LDFCL.exe');
+    OldUninstaller := ExpandConstant('{app}\runtime\uninstall\unins000.exe');
+  end else begin
+    OldLauncher := ExpandConstant('{app}\bin\LDFCL.exe');
+    OldUninstaller := ExpandConstant('{app}\unins000.exe');
+  end;
+  if not FileExists(OldLauncher) then Exit;
   if not RegQueryStringValue(HKCU, LegacyUninstallKey, 'UninstallString', RegisteredCommand) then Exit;
   if CompareText(RemoveQuotes(RegisteredCommand), OldUninstaller) <> 0 then Exit;
   Result := Exec(OldUninstaller, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '',
     SW_HIDE, ewWaitUntilTerminated, ExitCode);
   if Result then
-    Result := (ExitCode = 0) and not FileExists(ExpandConstant('{app}\bin\LDFCL.exe'));
+    Result := (ExitCode = 0) and not FileExists(OldLauncher);
+end;
+
+function IsPreviousQtLayout: Boolean;
+begin
+  Result := PreviousQtLayout;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
+  PreviousQtLayout := FileExists(ExpandConstant('{app}\runtime\bin\Qt6Core.dll')) and
+    FileExists(ExpandConstant('{app}\runtime\bin\LDFCL.exe'));
   Result := '';
   if GameMode.SelectedValueIndex = 1 then begin
-    SelectedGame := ExistingGameRoot(ExistingGame.Values[0]);
+    SelectedGame := ChosenExistingGame;
     if SelectedGame = '' then Result := CustomMessage('GameDirectoryMissing');
   end else begin
     SelectedGame := ExpandConstant('{localappdata}\LDFCL\game');
@@ -161,10 +223,29 @@ begin
       Result := CustomMessage('RemoveLegacyInstallFailed');
 end;
 
+function SaveGameDirectory: Boolean;
+var
+  Root, TargetFile, TempFile, StoredPath: String;
+begin
+  Result := False;
+  Root := AddBackslash(ExpandConstant('{app}'));
+  TargetFile := Root + GameDirectoryFile;
+  if not ForceDirectories(ExtractFileDir(TargetFile)) then Exit;
+  TempFile := TargetFile + '.' + ExtractFileName(ExpandConstant('{tmp}')) + '.tmp';
+  StoredPath := SelectedGame;
+  if CompareText(SelectedGame, RemoveBackslashUnlessRoot(Root)) = 0 then
+    StoredPath := '.'
+  else if CompareText(Copy(SelectedGame, 1, Length(Root)), Root) = 0 then
+    StoredPath := Copy(SelectedGame, Length(Root) + 1, Length(SelectedGame));
+
+  if SaveStringToFile(TempFile, UTF8Encode(StoredPath), False) then
+    Result := MoveFileEx(TempFile, TargetFile, MoveFileReplaceExisting);
+  if not Result then DeleteFile(TempFile);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if CurStep = ssPostInstall then begin
-    if not RegWriteStringValue(HKCU, SettingsKey, GameDirectoryValue, SelectedGame) then
+  if CurStep = ssPostInstall then
+    if not SaveGameDirectory then
       RaiseException(CustomMessage('SaveGameDirectoryFailed'));
-  end;
 end;

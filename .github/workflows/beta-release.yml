@@ -1,32 +1,96 @@
 name: Publish beta release
 
 on:
+  push:
+    branches:
+      - 'release/beta[0-9]*'
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing beta tag to package
-        required: true
+        description: Legacy beta tag to repackage (leave blank to retry this release branch)
+        required: false
         type: string
-  push:
-    tags:
-      - 'beta[0-9]*'
 
 permissions:
-  contents: write
-
-env:
-  RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
-  SETUP_SUFFIX: ${{ (inputs.release_tag || github.ref_name) == 'beta1.0.1' && 'Bilingual-Setup' || 'Setup' }}
+  contents: read
 
 concurrency:
   group: release-${{ inputs.release_tag || github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  windows-x64:
-    name: Build and publish Windows x64
+  windows-rust:
+    if: ${{ startsWith(github.ref, 'refs/heads/release/beta') && !inputs.release_tag }}
+    name: Build, verify and publish Windows x64
+    runs-on: windows-2022
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      RUSTFLAGS: -C target-feature=+crt-static
+      RUST_TOOLCHAIN: '1.100.1'
+      RUST_TARGET: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Validate release branch and install toolchain
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          if ($env:GITHUB_REF_NAME -cnotmatch '^release/(beta((0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)))$') {
+            throw "Invalid release branch: $env:GITHUB_REF_NAME"
+          }
+          $tag = $Matches[1]
+          $version = $Matches[2]
+          if ((git rev-parse HEAD) -ne $env:GITHUB_SHA) { throw 'Checkout does not match the release commit' }
+          if (git ls-remote --tags origin "refs/tags/$tag") { throw "Tag already exists: $tag" }
+
+          rustup toolchain install $env:RUST_TOOLCHAIN --profile minimal --target $env:RUST_TARGET
+          $manifest = cargo "+$env:RUST_TOOLCHAIN" metadata --locked --no-deps --format-version 1 | ConvertFrom-Json
+          if (-not ($manifest.packages | Where-Object { $_.name -eq 'ldfcl' -and $_.version -eq $version })) {
+            throw "Cargo package version does not match $tag"
+          }
+          $sdkBin = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits/10/bin'
+          $fxc = Get-ChildItem $sdkBin -Directory |
+            Where-Object { Test-Path (Join-Path $_.FullName 'x64/fxc.exe') } |
+            Sort-Object { [version]$_.Name } -Descending |
+            Select-Object -First 1
+          if (-not $fxc) { throw 'The Windows SDK HLSL compiler (fxc.exe) is missing' }
+          "GPUI_FXC_PATH=$(Join-Path $fxc.FullName 'x64/fxc.exe')" >> $env:GITHUB_ENV
+          "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
+
+      - name: Build and test Rust
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          cargo "+$env:RUST_TOOLCHAIN" test --locked --release --no-default-features --target $env:RUST_TARGET
+          cargo "+$env:RUST_TOOLCHAIN" build --locked --release --bins --target $env:RUST_TARGET
+
+      - name: Compile and verify the bilingual installer
+        run: |
+          ./packaging/windows-package.ps1 -ReleaseTag $env:RELEASE_TAG -RustTarget $env:RUST_TARGET -RustToolchain $env:RUST_TOOLCHAIN -SmokeTest
+
+      - name: Publish GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $tag = $env:RELEASE_TAG
+          if (git ls-remote --tags origin "refs/tags/$tag") { throw "Tag already exists: $tag" }
+          $setup = "dist/LDFCL-$tag-Windows-x64-Setup.exe"
+          $notes = "LDFCL 现已使用 Rust 和 GPUI。支持本地 Minecraft 版本、PCL/HMCL 游戏目录和 Java 自动匹配。Windows x64 安装向导提供简体中文和英文。"
+          gh release create $tag $setup "$setup.sha256" --target $env:GITHUB_SHA --prerelease --title "LDFCL $tag" --notes $notes
+
+  windows-legacy:
+    if: ${{ contains(fromJSON('["beta1.0.0", "beta1.0.1", "beta1.0.2"]'), inputs.release_tag) }}
+    name: Repackage a legacy Windows release
     runs-on: windows-2022
     timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      SETUP_SUFFIX: ${{ inputs.release_tag == 'beta1.0.1' && 'Bilingual-Setup' || 'Setup' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -35,7 +99,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-          ref: ${{ github.sha }}
+          ref: 667524779e99956262dec1f0dc361d5b457206f5 # Historical Windows packaging
           path: release-tools
           sparse-checkout: packaging
       - uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
