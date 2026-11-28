@@ -60,13 +60,36 @@ jobs:
           "GPUI_FXC_PATH=$(Join-Path $fxc.FullName 'x64/fxc.exe')" >> $env:GITHUB_ENV
           "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
 
+      - name: Restore verified Windows binaries
+        id: rust-binaries
+        uses: actions/cache/restore@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: |
+            target/x86_64-pc-windows-msvc/release/LDFCL.exe
+            target/x86_64-pc-windows-msvc/release/ldfcl-cli.exe
+            target/x86_64-pc-windows-msvc/release/ldfcl-uninstall.exe
+          key: windows-x64-static-tested-v1-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'rust-toolchain.toml', 'rust/**/*.rs', 'tests/**/*.rs') }}
+
       - name: Build and test Rust
+        if: steps.rust-binaries.outputs.cache-hit != 'true'
+        timeout-minutes: 25
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
           cargo "+$env:RUST_TOOLCHAIN" test --locked --release --no-default-features --target $env:RUST_TARGET
           cargo "+$env:RUST_TOOLCHAIN" build --locked --release --bins --target $env:RUST_TARGET
 
+      - name: Save verified Windows binaries
+        if: steps.rust-binaries.outputs.cache-hit != 'true'
+        uses: actions/cache/save@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: |
+            target/x86_64-pc-windows-msvc/release/LDFCL.exe
+            target/x86_64-pc-windows-msvc/release/ldfcl-cli.exe
+            target/x86_64-pc-windows-msvc/release/ldfcl-uninstall.exe
+          key: ${{ steps.rust-binaries.outputs.cache-primary-key }}
+
       - name: Compile and verify the bilingual installer
+        timeout-minutes: 20
         run: |
           ./packaging/windows-package.ps1 -ReleaseTag $env:RELEASE_TAG -RustTarget $env:RUST_TARGET -RustToolchain $env:RUST_TOOLCHAIN -SmokeTest
 

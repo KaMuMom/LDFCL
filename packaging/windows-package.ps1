@@ -18,19 +18,36 @@ $outputDir = Join-Path $repo 'dist'
 $setupName = "LDFCL-$ReleaseTag-Windows-x64-Setup"
 $setup = Join-Path $outputDir "$setupName.exe"
 
+function Set-PackagingPhase([string]$Name, [string[]]$Logs = @()) {
+    $script:phase = $Name
+    $script:phaseLogs = $Logs
+    Write-Host "[packaging] $Name"
+}
+
 function Get-VerifiedDownload($Uri, $Path, $SHA256) {
-    Invoke-WebRequest $Uri -OutFile $Path
+    Invoke-WebRequest $Uri -OutFile $Path -TimeoutSec 120
     if ((Get-FileHash -Algorithm SHA256 $Path).Hash -ne $SHA256) {
         throw "SHA-256 mismatch for $Uri"
+    }
+    Unblock-File -LiteralPath $Path
+}
+
+function Invoke-BoundedProcess($File, [string[]]$Arguments, [int]$TimeoutSeconds, $OutputLog, $ErrorLog) {
+    $startOptions = @{ FilePath = $File; ArgumentList = $Arguments; PassThru = $true }
+    if ($OutputLog) { $startOptions.RedirectStandardOutput = $OutputLog }
+    if ($ErrorLog) { $startOptions.RedirectStandardError = $ErrorLog }
+    $process = Start-Process @startOptions
+    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+        try { $process.Kill($true) } catch { Write-Warning 'Could not stop the timed-out process tree' }
+        throw "$(Split-Path -Leaf $File) exceeded its ${TimeoutSeconds}s timeout"
+    }
+    if ($process.ExitCode -ne 0) {
+        throw "$(Split-Path -Leaf $File) exited with code $($process.ExitCode)"
     }
 }
 
 function Invoke-Installer($File, [string[]]$Arguments, $Log) {
-    $process = Start-Process -FilePath $File -ArgumentList ($Arguments + ('/LOG="{0}"' -f $Log)) -Wait -PassThru
-    if ($process.ExitCode -ne 0) {
-        if (Test-Path $Log) { Get-Content $Log -Tail 30 | Write-Host }
-        throw "Installer exited with code $($process.ExitCode): $File"
-    }
+    Invoke-BoundedProcess $File ($Arguments + ('/LOG="{0}"' -f $Log)) 150
 }
 
 function Test-InstallerLanguage($Log, $Locale) {
@@ -40,7 +57,12 @@ function Test-InstallerLanguage($Log, $Locale) {
 }
 
 function Copy-DependencyLicenses($Destination) {
-    $manifest = cargo "+$RustToolchain" metadata --locked --format-version 1 --filter-platform $RustTarget | ConvertFrom-Json
+    $metadata = Join-Path $scratch 'cargo-metadata.json'
+    $metadataErrors = Join-Path $scratch 'cargo-metadata.log'
+    Set-PackagingPhase 'Collect dependency licenses' @($metadataErrors)
+    Invoke-BoundedProcess 'cargo.exe' @("+$RustToolchain", 'metadata', '--locked', '--format-version', '1', '--filter-platform', $RustTarget) `
+        180 $metadata $metadataErrors
+    $manifest = Get-Content -LiteralPath $metadata -Encoding utf8 -Raw | ConvertFrom-Json
     $summary = foreach ($crate in $manifest.packages | Sort-Object name,version) {
         if ($crate.id -in $manifest.workspace_members) { continue }
         $crateRoot = Split-Path -Parent $crate.manifest_path
@@ -62,6 +84,7 @@ function Copy-DependencyLicenses($Destination) {
 
 Push-Location $repo
 try {
+    Set-PackagingPhase 'Stage compiled Windows binaries'
     $package = Join-Path $scratch 'package'
     $runtimeBin = Join-Path $package 'runtime/bin'
     $licenses = Join-Path $package 'runtime/licenses'
@@ -70,6 +93,7 @@ try {
     Copy-Item (Join-Path $target 'ldfcl-cli.exe') $runtimeBin
     Copy-DependencyLicenses $licenses
 
+    Set-PackagingPhase 'Download Inno Setup and Simplified Chinese messages'
     $compilerInstaller = Join-Path $scratch 'innosetup-6.7.4.exe'
     $compilerDirectory = Join-Path $scratch 'Inno Setup 6.7.4'
     $chineseMessages = Join-Path $scratch 'ChineseSimplified.isl'
@@ -78,10 +102,23 @@ try {
     Get-VerifiedDownload 'https://raw.githubusercontent.com/jrsoftware/issrc/c2913c993858a781fcb455bac8b8949c1c366cb8/Files/Languages/Unofficial/ChineseSimplified.isl' `
         $chineseMessages '7d544b9bb1d142cfa11f2e5d3cc8abe2e55f8e066c5124e3772675aa236e1278'
     $silent = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART')
-    Invoke-Installer $compilerInstaller ($silent + ('/DIR="{0}"' -f $compilerDirectory)) (Join-Path $scratch 'inno.log')
+    $silentSetup = $silent + '/SP-'
+    $innoLog = Join-Path $scratch 'inno.log'
+    Set-PackagingPhase 'Install Inno Setup compiler' @($innoLog)
+    Invoke-Installer $compilerInstaller ($silentSetup + ('/DIR="{0}"' -f $compilerDirectory)) $innoLog
     $iscc = Join-Path $compilerDirectory 'ISCC.exe'
-    & $iscc "/DReleaseTag=$ReleaseTag" "/DSourceRoot=$package" "/DSetupBasename=$setupName" "/DOutputRoot=$outputDir" `
-        "/DChineseMessages=$chineseMessages" (Join-Path $PSScriptRoot 'LDFCL.iss')
+    $compilerLog = Join-Path $scratch 'iscc.log'
+    $compilerErrors = Join-Path $scratch 'iscc-errors.log'
+    Set-PackagingPhase 'Compile the bilingual installer' @($compilerLog, $compilerErrors)
+    $compilerArgs = @(
+        "/DReleaseTag=$ReleaseTag",
+        ('"/DSourceRoot={0}"' -f $package),
+        "/DSetupBasename=$setupName",
+        ('"/DOutputRoot={0}"' -f $outputDir),
+        ('"/DChineseMessages={0}"' -f $chineseMessages),
+        ('"{0}"' -f (Join-Path $PSScriptRoot 'LDFCL.iss'))
+    )
+    Invoke-BoundedProcess $iscc $compilerArgs 240 $compilerLog $compilerErrors
 
     $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
     Set-Content -Encoding ascii "$setup.sha256" "$hash  $setupName.exe"
@@ -95,11 +132,14 @@ try {
     Set-Content (Join-Path $fixtureVersion 'fixture.json') -Encoding ascii '{"mainClass":"fixture.Main","libraries":[],"javaVersion":{"majorVersion":17}}'
     Set-Content (Join-Path $fixtureVersion 'fixture.jar') -Encoding ascii 'Fixture client'
     $registry = 'HKCU:\Software\LDFCL\LDFCL'
-    $setupArgs = $silent + ('/DIR="{0}"' -f $appRoot)
+    $setupArgs = $silentSetup + ('/DIR="{0}"' -f $appRoot)
     $legacySetup = Join-Path $scratch 'LDFCL-beta1.0.2-Windows-x64-Setup.exe'
+    Set-PackagingPhase 'Download the published beta1.0.2 installer'
     Get-VerifiedDownload 'https://github.com/KaMuMom/LDFCL/releases/download/beta1.0.2/LDFCL-beta1.0.2-Windows-x64-Setup.exe' `
         $legacySetup 'b66c9afc8870523b4ac79da306100df84e90ea2d8f9051860ac5af4433aead7a'
-    Invoke-Installer $legacySetup ($setupArgs + '/LANG=en' + ('/GAMEFOLDER="{0}"' -f $previous)) (Join-Path $scratch 'legacy.log')
+    $legacyLog = Join-Path $scratch 'legacy.log'
+    Set-PackagingPhase 'Install beta1.0.2 with an imported game directory' @($legacyLog)
+    Invoke-Installer $legacySetup ($setupArgs + '/LANG=en' + ('/GAMEFOLDER="{0}"' -f $previous)) $legacyLog
     if (-not (Test-Path (Join-Path $appRoot 'runtime/bin/Qt6Core.dll'))) { throw 'The legacy Qt layout is missing' }
 
     $manualJava = 'runtime/bin/manual-java/java.exe'
@@ -115,6 +155,7 @@ try {
     ) | Set-Content (Join-Path $appRoot 'config/settings.ini') -Encoding utf8
 
     $chineseLog = Join-Path $scratch 'zhcn.log'
+    Set-PackagingPhase 'Upgrade beta1.0.2 with the Simplified Chinese installer' @($chineseLog)
     Invoke-Installer $setup ($setupArgs + '/LANG=zhcn') $chineseLog
     Test-InstallerLanguage $chineseLog 'zhcn'
     $gamePreference = 'config/game-directory.txt'
@@ -127,13 +168,19 @@ try {
     if ((Get-Content (Join-Path $appRoot 'runtime/LICENSE.zh-CN.txt') -Encoding utf8 -Raw) -notmatch 'MIT 许可证') {
         throw 'The Simplified Chinese license notice was not installed'
     }
-    $versions = & (Join-Path $appRoot 'runtime/bin/ldfcl-cli.exe') list --game-dir $previous
+    $cliOutput = Join-Path $scratch 'cli.txt'
+    $cliErrors = Join-Path $scratch 'cli.log'
+    Set-PackagingPhase 'Check the installed CLI can find the imported game' @($cliErrors)
+    Invoke-BoundedProcess (Join-Path $appRoot 'runtime/bin/ldfcl-cli.exe') @('list', '--game-dir', ('"{0}"' -f $previous)) 30 $cliOutput $cliErrors
+    $versions = (Get-Content -LiteralPath $cliOutput -Raw).Trim()
     if ($versions -ne 'fixture') { throw 'The installed CLI could not list the imported version' }
 
     $moved = Join-Path $scratch 'LDFCL Moved Test'
+    $guiErrors = Join-Path $scratch 'gui.log'
+    Set-PackagingPhase 'Open GPUI from a moved directory and verify migrated settings' @($guiErrors)
     Move-Item $appRoot $moved
     $env:GPUI_DISABLE_DIRECT_COMPOSITION = '1'
-    $gui = Start-Process (Join-Path $moved 'LDFCL.exe') -PassThru
+    $gui = Start-Process (Join-Path $moved 'LDFCL.exe') -PassThru -RedirectStandardError $guiErrors
     try {
         $migratedConfig = Join-Path $moved 'config/settings.json'
         $deadline = [datetime]::UtcNow.AddSeconds(20)
@@ -152,14 +199,19 @@ try {
             throw 'Migrated settings changed the isolation mode, automatic Java preference or relative Java path'
         }
     } finally {
-        if (-not $gui.HasExited) { Stop-Process -Id $gui.Id; $gui.WaitForExit() }
+        if (-not $gui.HasExited) {
+            $gui.Kill($true)
+            if (-not $gui.WaitForExit(10000)) { throw 'The GPUI launcher did not exit after termination' }
+        }
         Move-Item $moved $appRoot
     }
 
-    $uninstall = Start-Process (Join-Path $appRoot 'Uninstall.exe') -ArgumentList $silent -Wait -PassThru
-    $deadline = [datetime]::UtcNow.AddSeconds(12)
+    $uninstallLog = Join-Path $scratch 'uninstall.log'
+    Set-PackagingPhase 'Uninstall and verify user data remains' @($uninstallLog)
+    Invoke-Installer (Join-Path $appRoot 'Uninstall.exe') $silent $uninstallLog
+    $deadline = [datetime]::UtcNow.AddSeconds(60)
     while ((Test-Path (Join-Path $appRoot 'LDFCL.exe')) -and [datetime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 250 }
-    if ($uninstall.ExitCode -ne 0 -or (Test-Path (Join-Path $appRoot 'LDFCL.exe'))) { throw 'Uninstall failed' }
+    if (Test-Path (Join-Path $appRoot 'LDFCL.exe')) { throw 'Uninstall did not finish within 60s' }
     foreach ($required in @($installedJava, (Join-Path $fixtureVersion 'fixture.jar'),
             (Join-Path $appRoot $gamePreference), (Join-Path $appRoot 'config/settings.json'))) {
         if (-not (Test-Path $required)) { throw "Uninstall removed user data: $required" }
@@ -168,12 +220,25 @@ try {
     Remove-ItemProperty $registry -Name gameDirectory
     $freshRoot = Join-Path $scratch 'LDFCL English Install Test'
     $englishLog = Join-Path $scratch 'en.log'
-    Invoke-Installer $setup ($silent + ('/DIR="{0}"' -f $freshRoot) + '/LANG=en') $englishLog
+    Set-PackagingPhase 'Verify a fresh installation in English' @($englishLog)
+    Invoke-Installer $setup ($silentSetup + ('/DIR="{0}"' -f $freshRoot) + '/LANG=en') $englishLog
     Test-InstallerLanguage $englishLog 'en'
     $fresh = (Get-Content (Join-Path $freshRoot $gamePreference) -Encoding utf8 -Raw).Trim()
     $expected = (Join-Path $env:LOCALAPPDATA 'LDFCL/game').Replace('/', '\')
     if ($fresh -ne $expected -or -not (Test-Path (Join-Path $fresh 'versions'))) { throw "Wrong fresh game directory: $fresh" }
     Write-Host "Verified installer: $setup"
+} catch {
+    $details = @($_.Exception.Message)
+    foreach ($log in $phaseLogs) {
+        if (Test-Path -LiteralPath $log -PathType Leaf) {
+            try { $details += Get-Content -LiteralPath $log -Tail 16 } catch { }
+        }
+    }
+    $message = ($details -join "`n") -replace '(https?://[^?\s]+)\?\S+', '$1?[redacted]'
+    if ($message.Length -gt 7000) { $message = $message.Substring(0, 7000) }
+    $message = $message.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+    Write-Host "::error title=${phase}::$message"
+    throw
 } finally {
     Pop-Location
 }

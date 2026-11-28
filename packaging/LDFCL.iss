@@ -184,13 +184,10 @@ var
   ExitCode: Integer;
 begin
   Result := True;
-  if PreviousQtLayout then begin
-    OldLauncher := ExpandConstant('{app}\runtime\bin\LDFCL.exe');
-    OldUninstaller := ExpandConstant('{app}\runtime\uninstall\unins000.exe');
-  end else begin
-    OldLauncher := ExpandConstant('{app}\bin\LDFCL.exe');
-    OldUninstaller := ExpandConstant('{app}\unins000.exe');
-  end;
+  { Installations with the runtime layout already share the current uninstall log. }
+  if PreviousQtLayout then Exit;
+  OldLauncher := ExpandConstant('{app}\bin\LDFCL.exe');
+  OldUninstaller := ExpandConstant('{app}\unins000.exe');
   if not FileExists(OldLauncher) then Exit;
   if not RegQueryStringValue(HKCU, LegacyUninstallKey, 'UninstallString', RegisteredCommand) then Exit;
   if CompareText(RemoveQuotes(RegisteredCommand), OldUninstaller) <> 0 then Exit;
